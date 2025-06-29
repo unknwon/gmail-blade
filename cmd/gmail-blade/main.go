@@ -38,10 +38,19 @@ func main() {
 						Name:  "debug",
 						Usage: "Show debug output",
 					},
+					&cli.BoolFlag{
+						Name:  "errors-only",
+						Usage: "Only show errors in output",
+					},
 				},
 				Action: func(c *cli.Context) error {
+					if c.Bool("errors-only") && c.Bool("debug") {
+						return errors.New("cannot use both --errors-only and --debug flags")
+					}
 					if c.Bool("debug") {
 						log.SetLevel(log.DebugLevel)
+					} else if c.Bool("errors-only") {
+						log.SetLevel(log.ErrorLevel)
 					}
 
 					config, err := parseConfig(c.String("config"))
@@ -50,7 +59,7 @@ func main() {
 					}
 
 					dryRun := c.Bool("dry-run")
-					return filterEmails(config, dryRun)
+					return runOnce(config, dryRun)
 				},
 			},
 			{
@@ -67,10 +76,27 @@ func main() {
 						Name:  "debug",
 						Usage: "Show debug output",
 					},
+					&cli.BoolFlag{
+						Name:  "errors-only",
+						Usage: "Only show errors in output",
+					},
 				},
-				Action: func(cCtx *cli.Context) error {
-					fmt.Println("Server mode not implemented yet")
-					return nil
+				Action: func(c *cli.Context) error {
+					if c.Bool("errors-only") && c.Bool("debug") {
+						return errors.New("cannot use both --errors-only and --debug flags")
+					}
+					if c.Bool("debug") {
+						log.SetLevel(log.DebugLevel)
+					} else if c.Bool("errors-only") {
+						log.SetLevel(log.ErrorLevel)
+					}
+
+					config, err := parseConfig(c.String("config"))
+					if err != nil {
+						return errors.Wrap(err, "parse config")
+					}
+
+					return runServer(config)
 				},
 			},
 			{
@@ -96,7 +122,7 @@ func main() {
 					if err != nil {
 						return errors.Wrap(err, "parse config")
 					}
-					return listMailboxes(config)
+					return runListMailboxes(config)
 				},
 			},
 		},
@@ -111,18 +137,22 @@ var (
 	labelRegexp = regexp.MustCompile(`label "([^"]*)"`)
 )
 
-func filterEmails(config *config, dryRun bool) error {
-	client, err := imapclient.DialTLS("imap.gmail.com:993", nil)
+func runOnce(config *config, dryRun bool) error {
+	client, closeClient, err := getAuthenticatedClient(config.Credentials)
 	if err != nil {
-		return errors.Wrap(err, "dial IMAP server")
+		return errors.Wrap(err, "get authenticated IMAP client")
 	}
-	defer func() { _ = client.Close() }()
+	defer closeClient()
 
-	if err = client.Login(config.Credentials.Username, config.Credentials.Password).Wait(); err != nil {
-		return errors.Wrap(err, "login to IMAP server")
+	err = processMessages(dryRun, client, config.Filters)
+	if err != nil {
+		return errors.Wrap(err, "process messages")
 	}
+	return nil
+}
 
-	_, err = client.Select(
+func processMessages(dryRun bool, client *imapclient.Client, filters []configFilter) error {
+	_, err := client.Select(
 		"INBOX",
 		&imap.SelectOptions{
 			ReadOnly: true,
@@ -154,7 +184,7 @@ func filterEmails(config *config, dryRun bool) error {
 		}
 
 		for _, msg := range messages {
-			// Skip seen emails
+			// Skip read emails
 			if slices.Contains(msg.Flags, imap.FlagSeen) {
 				continue
 			}
@@ -186,7 +216,7 @@ func filterEmails(config *config, dryRun bool) error {
 			}
 
 			var actions []string
-			for _, f := range config.Filters {
+			for _, f := range filters {
 				result, err := expr.Run(
 					f.CompiledCondition,
 					map[string]any{
@@ -210,62 +240,67 @@ func filterEmails(config *config, dryRun bool) error {
 				}
 			}
 
-			if len(actions) > 0 {
-				log.Info(
-					"Actions matched",
+			if len(actions) == 0 {
+				log.Debug(
+					"No actions matched",
 					"uid", msg.UID,
 					"subject", msg.Envelope.Subject,
-					"actions", actions,
 				)
+				continue
+			}
 
-				if !dryRun {
-					for _, action := range actions {
-						if action == "delete" {
-							uidSet := imap.UIDSetNum()
-							uidSet.AddNum(msg.UID)
-							_, err := client.Move(uidSet, "[Gmail]/Trash").Wait()
-							if err != nil {
-								log.Error("Failed to move email to trash", "uid", msg.UID, "error", err)
-							}
-						} else if strings.HasPrefix(action, "label ") {
-							label := labelRegexp.FindStringSubmatch(action)
-							if len(label) < 2 {
-								log.Error("Invalid label action", "uid", msg.UID, "action", action)
-								continue
-							}
-							labelName := label[1]
+			log.Info(
+				"Actions matched",
+				"uid", msg.UID,
+				"subject", msg.Envelope.Subject,
+				"actions", actions,
+				"dryRun", dryRun,
+			)
+			if dryRun {
+				continue
+			}
 
-							uidSet := imap.UIDSetNum()
-							uidSet.AddNum(msg.UID)
-							_, err := client.Copy(uidSet, labelName).Wait()
-							if err != nil {
-								log.Error("Failed to label email", "uid", msg.UID, "label", labelName, "error", err)
-							}
-						} else {
-							log.Warn("Unknown action", "action", action)
-						}
+			for _, action := range actions {
+				if action == "delete" {
+					uidSet := imap.UIDSetNum()
+					uidSet.AddNum(msg.UID)
+					_, err := client.Move(uidSet, "[Gmail]/Trash").Wait()
+					if err != nil {
+						log.Error("Failed to move email to trash", "uid", msg.UID, "error", err)
 					}
+				} else if strings.HasPrefix(action, "label ") {
+					label := labelRegexp.FindStringSubmatch(action)
+					if len(label) < 2 {
+						log.Error("Invalid label action", "uid", msg.UID, "action", action)
+						continue
+					}
+					labelName := label[1]
+
+					uidSet := imap.UIDSetNum()
+					uidSet.AddNum(msg.UID)
+					_, err := client.Copy(uidSet, labelName).Wait()
+					if err != nil {
+						log.Error("Failed to label email", "uid", msg.UID, "label", labelName, "error", err)
+					}
+				} else {
+					log.Warn("Unknown action", "action", action)
 				}
 			}
 		}
 	}
-
-	if err := client.Logout().Wait(); err != nil {
-		return errors.Wrap(err, "logout from IMAP server")
-	}
 	return nil
 }
 
-func listMailboxes(config *config) error {
-	client, err := imapclient.DialTLS("imap.gmail.com:993", nil)
-	if err != nil {
-		return errors.Wrap(err, "dial IMAP server")
-	}
-	defer func() { _ = client.Close() }()
+func runServer(config *config) error {
+	return errors.New("Server mode is not implemented yet")
+}
 
-	if err = client.Login(config.Credentials.Username, config.Credentials.Password).Wait(); err != nil {
-		return errors.Wrap(err, "login to IMAP server")
+func runListMailboxes(config *config) error {
+	client, closeClient, err := getAuthenticatedClient(config.Credentials)
+	if err != nil {
+		return errors.Wrap(err, "get authenticated IMAP client")
 	}
+	defer closeClient()
 
 	mailboxList, err := client.List("", "*", nil).Collect()
 	if err != nil {
@@ -276,9 +311,19 @@ func listMailboxes(config *config) error {
 		mailboxes[i] = mailbox.Mailbox
 	}
 	log.Info("Found mailboxes", "mailboxes", strings.Join(mailboxes, "\n"))
-
-	if err := client.Logout().Wait(); err != nil {
-		return errors.Wrap(err, "logout from IMAP server")
-	}
 	return nil
+}
+
+func getAuthenticatedClient(credentials configCredentials) (_ *imapclient.Client, close func(), _ error) {
+	client, err := imapclient.DialTLS("imap.gmail.com:993", nil)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "dial IMAP server")
+	}
+
+	if err = client.Login(credentials.Username, credentials.Password).Wait(); err != nil {
+		_ = client.Close()
+		return nil, nil, errors.Wrap(err, "login to IMAP server")
+	}
+
+	return client, func() { _ = client.Logout().Wait(); _ = client.Close() }, nil
 }

@@ -13,17 +13,21 @@ import (
 )
 
 type config struct {
-	Credentials struct {
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-	} `yaml:"credentials"`
-	Filters []struct {
-		Name              string      `yaml:"name"`
-		Condition         string      `yaml:"condition"`
-		CompiledCondition *vm.Program `yaml:"-"`
-		Action            string      `yaml:"action"`
-		HaltOnMatch       bool        `yaml:"halt-on-match"`
-	} `yaml:"filters"`
+	Credentials configCredentials `yaml:"credentials"`
+	Filters     []configFilter    `yaml:"filters"`
+}
+
+type configCredentials struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type configFilter struct {
+	Name              string      `yaml:"name"`
+	Condition         string      `yaml:"condition"`
+	CompiledCondition *vm.Program `yaml:"-"`
+	Action            string      `yaml:"action"`
+	HaltOnMatch       bool        `yaml:"halt-on-match"`
 }
 
 func parseConfig(path string) (*config, error) {
