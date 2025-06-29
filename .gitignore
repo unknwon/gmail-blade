@@ -1,0 +1,13 @@
+# Artifacts
+.bin
+
+# Configuration and application files
+.idea
+.envrc
+.task
+gmail-blade.yml
+
+# System junk
+.DS_Store
+
+# Dependencies
