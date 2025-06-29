@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"syscall"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/pkg/errors"
+	"golang.org/x/term"
 	"gopkg.in/yaml.v3"
 )
 
@@ -36,6 +39,17 @@ func parseConfig(path string) (*config, error) {
 
 	// Allow environment variable override for password
 	c.Credentials.Password = os.ExpandEnv(c.Credentials.Password)
+
+	// Prompt for password if empty
+	if c.Credentials.Password == "" {
+		fmt.Print("Password: ")
+		password, err := term.ReadPassword(int(syscall.Stdin))
+		if err != nil {
+			return nil, errors.Wrap(err, "read password")
+		}
+		fmt.Println()
+		c.Credentials.Password = string(password)
+	}
 
 	for i, f := range c.Filters {
 		program, err := expr.Compile(f.Condition)
