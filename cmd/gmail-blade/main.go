@@ -308,7 +308,6 @@ func runServer(dryRun bool, config *config) error {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start server in a goroutine
 	go func() {
 		<-sigChan
 		log.Info("Received SIGTERM, shutting down")
