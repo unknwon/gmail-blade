@@ -43,7 +43,7 @@ func parseConfig(path string) (*config, error) {
 	// Prompt for password if empty
 	if c.Credentials.Password == "" {
 		fmt.Print("Password: ")
-		password, err := term.ReadPassword(int(syscall.Stdin))
+		password, err := term.ReadPassword(syscall.Stdin)
 		if err != nil {
 			return nil, errors.Wrap(err, "read password")
 		}

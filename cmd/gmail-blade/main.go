@@ -122,7 +122,6 @@ func filterEmails(config *config, dryRun bool) error {
 		return errors.Wrap(err, "login to IMAP server")
 	}
 
-	// [Gmail]/Trash
 	_, err = client.Select(
 		"INBOX",
 		&imap.SelectOptions{
