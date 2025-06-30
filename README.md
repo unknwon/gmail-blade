@@ -123,7 +123,7 @@ Actions are executed in the same order as they are defined. You will get margina
 
 The sidecar _only_ looks at unread emails.
 
-To run the sidecar once, do `gmail-blade once`. To test your filters, you can dry run with `gmail-balde once --dry-run --debug`.
+To run the sidecar once, do `gmail-blade once`. To test your filters, you can dry run with `gmail-blade once --dry-run --debug`.
 
 To run the sidecar as a long-running service, do `gmail-blade server`, it pauses 30s after each run. It also supports `--dry-run` and `--debug` if you want to.
 
