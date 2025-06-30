@@ -43,7 +43,7 @@ func main() {
 
 	app := &cli.App{
 		Name:  "gmail-blade",
-		Usage: "A GMail sidecar for advanced filtering",
+		Usage: "A Gmail sidecar for advanced filtering",
 		Commands: []*cli.Command{
 			{
 				Name:  "once",
@@ -124,7 +124,8 @@ func main() {
 }
 
 var (
-	labelRegexp = regexp.MustCompile(`label "([^"]*)"`)
+	labelRegexp  = regexp.MustCompile(`label "([^"]*)"`)
+	moveToRegexp = regexp.MustCompile(`move to "([^"]*)"`)
 )
 
 func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}) error {
@@ -288,17 +289,30 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 				return errors.Wrapf(err, "move email to trash")
 			}
 		} else if strings.HasPrefix(action, "label ") {
-			label := labelRegexp.FindStringSubmatch(action)
-			if len(label) < 2 {
-				return errors.Errorf("invalid label action format for action %q", action)
+			match := labelRegexp.FindStringSubmatch(action)
+			if len(match) < 2 {
+				return errors.Errorf("invalid label action format %q", action)
 			}
-			labelName := label[1]
+			labelName := match[1]
 
 			uidSet := imap.UIDSetNum()
 			uidSet.AddNum(msg.UID)
 			_, err := client.Copy(uidSet, labelName).Wait()
 			if err != nil {
 				return errors.Wrapf(err, "copy email to label %q", labelName)
+			}
+		} else if strings.HasPrefix(action, "move to ") { // todo test dry run
+			match := moveToRegexp.FindStringSubmatch(action)
+			if len(match) < 2 {
+				return errors.Errorf("invalid move to action format %q", action)
+			}
+			mailboxName := match[1]
+
+			uidSet := imap.UIDSetNum()
+			uidSet.AddNum(msg.UID)
+			_, err := client.Move(uidSet, mailboxName).Wait()
+			if err != nil {
+				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
 		} else {
 			log.Warn("Unknown action", "action", action)
