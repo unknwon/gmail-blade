@@ -107,7 +107,8 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 
 #### Actions
 
->[!note] Gmail mailboxes and labels must already exist in your Gmail settings.
+>[!note]
+> Gmail mailboxes and labels must already exist in your Gmail settings.
 > You can use `gmail-blade list-mailboxes` to get all your mailboxes and labels.
 
 | Action        | Description                                                        |
