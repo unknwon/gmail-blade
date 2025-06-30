@@ -116,7 +116,7 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
 
-Actions are executed in the same order as they are defined. You will get marginal performance benefit if you put `half-on-match` ones on the top.
+Actions are executed in the same order as they are defined. You will get marginal performance benefit if you put `halt-on-match` ones on the top.
 
 ### Execution
 
