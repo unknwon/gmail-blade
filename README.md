@@ -107,7 +107,8 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 
 #### Actions
 
->![note] Gmail mailboxes and labels must already exist in your Gmail settings.
+>[!note] Gmail mailboxes and labels must already exist in your Gmail settings.
+> You can use `gmail-blade list-mailboxes` to get all your mailboxes and labels.
 
 | Action        | Description                                                        |
 |---------------|--------------------------------------------------------------------|
@@ -116,6 +117,14 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
 
 Actions are executed in the same order as they are defined. You will get marginal performance benefit if you put `half-on-match` ones on the top.
+
+### Execution
+
+To run the sidecar only once, do `gmail-blade once`. To test your filters, you can dry run with `gmail-balde once --dry-run --debug`.
+
+To run the sidecar as a long-running service, do `gmail-blade server`, it also supports `--dry-run` and `--debug` if you want to.
+
+Use `--help` flag to get helper information on `gmail-blade` and its subcommands.
 
 ## License
 
