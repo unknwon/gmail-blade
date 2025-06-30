@@ -213,6 +213,11 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 		cc = append(cc, fmt.Sprintf("%s@%s", ccAddr.Mailbox, ccAddr.Host))
 	}
 
+	to := make([]string, 0, len(msg.Envelope.To))
+	for _, toAddr := range msg.Envelope.To {
+		to = append(to, fmt.Sprintf("%s@%s", toAddr.Mailbox, toAddr.Host))
+	}
+
 	log.Debug(
 		"Unread message",
 		"uid", msg.UID,
@@ -220,6 +225,7 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 		"fromName", fromName,
 		"subject", msg.Envelope.Subject,
 		"cc", cc,
+		"to", to,
 	)
 
 	var body string
@@ -237,6 +243,7 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 					"fromName": fromName,
 					"subject":  msg.Envelope.Subject,
 					"cc":       cc,
+					"to":       to,
 					"body":     body,
 				},
 			})
