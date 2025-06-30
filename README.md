@@ -1,6 +1,5 @@
 <div align="center">
   <h3>Gmail Blade</h3>
-  <a href="https://sourcegraph.com/github.com/unknwon/gmail-blade"><img src="https://img.shields.io/badge/view%20on-Sourcegraph-brightgreen.svg?style=for-the-badge&logo=sourcegraph" alt="Sourcegraph"></a>
 </div>
 
 ## What?
