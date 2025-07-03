@@ -100,6 +100,7 @@ Type `Message`:
 | `subject`  | `string`   | The email subject                                                                          |
 | `cc`       | `[]string` | The list of `cc` addresses, e.g. `["joe@acme.com", "review_requested@noreply.github.com"]` |
 | `to`       | `[]string` | The list of `to` addresses, e.g. `["acme@noreply.github.com"]`                             |
+| `replyTo`  | `[]string` | The list of `replyTo` addresses, e.g. `["joe@acme.com"]` |
 | `body`     | `string`   | The email body                                                                             |
 
 If `halt-on-match` is `true`, then it will be the last action to take upon matching.
