@@ -10,8 +10,6 @@ Gmail Blade is a sidecar with advanced and precise filtering for your Gmail acco
 
 I am an inbox-zero guy, I rely on emails for all my notifications because the nature of emails is working asynchronously. I absolutely hate red dots and I disabled all of them. Unfortunately, native Gmail filters do not support precise filtering, and works more like a "search engine" over the emails, with fuzz matches, that creates lots of false positives. The speed of the email processing directly impact my productivity.
 
-Why I have waited so long? Every side project needs a kick, and [Sourcegraph Amp](https://ampcode.com/?ref=github-unknwon) did this one for me, I want to try it for a small project from scratch, and here it is.
-
 ## How?
 
 ### Installation
