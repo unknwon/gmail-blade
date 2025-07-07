@@ -8,9 +8,12 @@ Gmail Blade is a sidecar with advanced and precise filtering for your Gmail acco
 
 ## Why?
 
-I am an inbox-zero guy, I rely on emails for all my notifications because the nature of emails is working asynchronously. I absolutely hate red dots and I disabled all of them. Unfortunately, native Gmail filters do not support precise filtering, and works more like a "search engine" over the emails, with fuzz matches, that creates lots of false positives. The speed of the email processing directly impact my productivity.
+I am an inbox-zero guy, I rely on emails for all my notifications because the nature of emails is working asynchronously. I absolutely hate red dots and I disabled all of them. Unfortunately, native Gmail filters do not support precise filtering, and works more like a "search engine" over the emails, with fuzz matches, that creates lots of false positives. The speed of the email processing directly impacts my productivity.
 
 ## How?
+
+> [!warning]
+> This project is being actively iterated on, absence of break changes is best effort.
 
 ### Installation
 
@@ -105,7 +108,7 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 
 #### Actions
 
->[!note]
+> [!note]
 > Gmail mailboxes and labels must already exist in your Gmail settings.
 > You can use `gmail-blade list-mailboxes` to get all your mailboxes and labels.
 
