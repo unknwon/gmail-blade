@@ -4,4 +4,4 @@
 
 ## Build instructions
 
-- When you need to use `go build` to test builds, make sure the binary is located under `.bin` to be ignored by `.gitignore`. It is even better to remove the binary when you are done testing the build.
+- When you need to use `go build` to test builds, make sure the binary is located under `.bin` to be ignored by `.gitignore`.

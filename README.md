@@ -37,51 +37,62 @@ filters:
   - name: "Delete GitHub backport notifications"
     condition: |
       "notifications@github.com" in message.from and message.subject contains "] [Backport "
-    action: delete
+    actions:
+      - delete
     halt-on-match: true
   - name: "Delete GitHub CI notifications"
     condition: |
       "ci_activity@noreply.github.com" in message.cc
-    action: move to "[Gmail]/Trash"
+    actions:
+      - move to "[Gmail]/Trash"
     halt-on-match: true
 
   - name: "Label GitHub"
     condition: |
       "notifications@github.com" in message.from
-    action: label "0-GitHub"
+    actions:
+      - label "0-GitHub"
   - name: "Label GitHub mentions"
     condition: |
       "notifications@github.com" in message.from and "mention@noreply.github.com" in message.cc
-    action: label "Mentioned"
+    actions:
+      - label "Mentioned"
   - name: "Label GitHub review requests"
     condition: |
       "notifications@github.com" in message.from and "review_requested@noreply.github.com" in message.cc
-    action: label "1-Review Requested"
+    actions:
+      - label "1-Review Requested"
   - name: "Label GitHub comments"
     condition: |
       "notifications@github.com" in message.from and "author@noreply.github.com" in message.cc
-    action: label "Comment"
+    actions:
+      - label "Comment"
   - name: "Label GitHub merged PRs"
     condition: |
       "notifications@github.com" in message.from and message.body contains "Merged #" and message.body contains " into main."
-    action: label "2-Merged"
+    actions:
+      - label "2-Merged"
   - name: "Label GitHub approvals"
     condition: |
       "notifications@github.com" in message.from and message.body contains "approved this pull request."
-    action: label "Approved"
+    actions:
+      - label "Approved"
 
   - name: "Label Sentry notifications"
     condition: |
       "noreply@md.getsentry.com" in message.from
-    action: label "Sentry"
+    actions:
+      - label "Sentry"
   - name: "Label Opsgenie notifications"
     condition: |
       "opsgenie@opsgenie.net" in message.from
-    action: label "Opsgenie"
+    actions:
+      - label "Opsgenie"
   - name: "Label Google Docs notifications"
     condition: |
       ("comments-noreply@docs.google.com" in message.from or "drive-shares-dm-noreply@google.com" in message.from) and count(message.fromName, # contains "Google Docs)") > 0
-    action: label "Google Docs"
+    actions:
+      - label "Google Docs"
 ```
 
 #### Condition expression
@@ -112,13 +123,23 @@ If `halt-on-match` is `true`, then it will be the last action to take upon match
 > Gmail mailboxes and labels must already exist in your Gmail settings.
 > You can use `gmail-blade list-mailboxes` to get all your mailboxes and labels.
 
+Each filter can have multiple actions that will be executed in sequence.
+
 | Action        | Description                                                        |
 |---------------|--------------------------------------------------------------------|
 | `move to "X"` | Move the message to the "X" mailbox, e.g. `move to "[Gmail]/Spam"` |
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
 
-Actions are executed in the same order as they are defined. You will get marginal performance benefit if you put `halt-on-match` ones on the top.
+Actions are defined as a list and are executed in the same order as they are defined:
+
+```yaml
+actions:
+  - label "GitHub"
+  - label "Processed"
+```
+
+You will get marginal performance benefit if you put `halt-on-match` ones on the top.
 
 ### Execution
 

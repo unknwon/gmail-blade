@@ -26,7 +26,7 @@ type configFilter struct {
 	Name              string      `yaml:"name"`
 	Condition         string      `yaml:"condition"`
 	CompiledCondition *vm.Program `yaml:"-"`
-	Action            string      `yaml:"action"`
+	Actions           []string    `yaml:"actions"`
 	HaltOnMatch       bool        `yaml:"halt-on-match"`
 }
 

@@ -259,7 +259,7 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 			log.Error("Failed to run expression", "error", err)
 		}
 		if fmt.Sprintf("%v", result) == "true" {
-			actions = append(actions, f.Action)
+			actions = append(actions, f.Actions...)
 			if f.HaltOnMatch {
 				log.Debug("Halt on match", "uid", msg.UID, "filter", f.Name)
 				break
