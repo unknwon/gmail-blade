@@ -1,7 +1,8 @@
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/1a9c8a9b-5c1d-4862-90bb-24561e200f00">
+  <img src="https://github.com/user-attachments/assets/4c01a935-42e2-432d-b25e-b708a471dcae">
   <h3>Gmail Blade</h3>
 </div>
+
 
 ## What?
 
