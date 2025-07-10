@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -14,12 +15,17 @@ import (
 
 type config struct {
 	Credentials configCredentials `yaml:"credentials"`
+	Server      configServer      `yaml:"server"`
 	Filters     []configFilter    `yaml:"filters"`
 }
 
 type configCredentials struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+}
+
+type configServer struct {
+	SleepInterval string `yaml:"sleepInterval"`
 }
 
 type configFilter struct {
@@ -61,6 +67,16 @@ func parseConfig(path string) (*config, error) {
 			return nil, errors.Wrapf(err, "compile condition for filter %q", f.Name)
 		}
 		c.Filters[i].CompiledCondition = program
+	}
+
+	// Set default server sleep interval if not configured
+	if c.Server.SleepInterval == "" {
+		c.Server.SleepInterval = "15s"
+	}
+
+	// Validate sleep interval duration
+	if _, err := time.ParseDuration(c.Server.SleepInterval); err != nil {
+		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
 	}
 
 	return &c, nil

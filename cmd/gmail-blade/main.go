@@ -344,6 +344,7 @@ func runServer(dryRun bool, config *config) error {
 	log.Info("Server started (press Ctrl+C to stop)")
 
 	processedUIDs := make(map[imap.UID]struct{})
+	sleepInterval, _ := time.ParseDuration(config.Server.SleepInterval)
 
 serverRoutine:
 	for {
@@ -355,7 +356,7 @@ serverRoutine:
 		select {
 		case <-ctx.Done():
 			break serverRoutine
-		case <-time.After(30 * time.Second):
+		case <-time.After(sleepInterval):
 		}
 	}
 

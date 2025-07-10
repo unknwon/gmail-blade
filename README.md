@@ -3,9 +3,6 @@
   <h3>Gmail Blade</h3>
 </div>
 
-
-
-
 ## What?
 
 Gmail Blade is a sidecar with advanced and precise filtering for your Gmail account. Utilizing the expressiveness of [`expr-lang/expr`](https://expr-lang.org/) to fully customize your Gmail experience. Make Gmail great again!
@@ -36,6 +33,11 @@ credentials:
   # Generate yours at: https://myaccount.google.com/apppasswords
   # You can also use the name of an environment variable, or leave empty to be prompted at start.
   password: "$GMAIL_PASSWORD"
+
+server:
+  # Sleep interval between processing runs (default: 15s)
+  # Uses Go duration format, e.g. "30s", "2m", "1h30m".
+  sleepInterval: "15s"
 
 filters:
   - name: "Delete GitHub backport notifications"
@@ -151,7 +153,7 @@ The sidecar _only_ looks at unread emails.
 
 To run the sidecar once, do `gmail-blade once`. To test your filters, you can dry run with `gmail-blade once --dry-run --debug`.
 
-To run the sidecar as a long-running service, do `gmail-blade server`, it pauses 30s after each run. It also supports `--dry-run` and `--debug` if you want to.
+To run the sidecar as a long-running service, do `gmail-blade server`, it pauses between runs (default 15s, configurable via `server.sleepInterval`). It also supports `--dry-run` and `--debug` if you want to.
 
 Use `--help` flag to get helper information on `gmail-blade` and its subcommands.
 
