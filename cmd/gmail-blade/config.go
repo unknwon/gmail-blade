@@ -27,7 +27,7 @@ type configCredentials struct {
 }
 
 type configServer struct {
-	SleepInterval string `yaml:"sleepInterval"`
+	SleepInterval string `yaml:"sleep_interval"`
 }
 
 type configGitHub struct {

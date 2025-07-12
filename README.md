@@ -37,7 +37,7 @@ credentials:
 server:
   # Sleep interval between processing runs (default: 15s)
   # Uses Go duration format, e.g. "30s", "2m", "1h30m".
-  sleepInterval: "15s"
+  sleep_interval: "15s"
 
 # Optional GitHub integration
 github:
@@ -192,7 +192,7 @@ To run the sidecar once:
 - It would be handy for quick testing by specifying a list of UIDs to scope down to with `gmail-blade once --uids 1234567890,1234567891`.
 
 To run the sidecar as a long-running service:
-- Do `gmail-blade server`, it pauses between runs (default 15s, configurable via `server.sleepInterval`).
+- Do `gmail-blade server`, it pauses between runs (default 15s, configurable via `server.sleep_interval`).
 - It also supports `--dry-run` and `--debug` if you want to.
 
 Use `--help` flag to get helper information on `gmail-blade` and its subcommands.
