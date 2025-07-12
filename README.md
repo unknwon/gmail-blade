@@ -41,13 +41,13 @@ server:
 
 # Optional GitHub integration
 github:
-  # Once enabled, the "GitHub review" (case insensitive) action is available to the filters.
-  enabled: true
   # GitHub Personal Access Token for API access
   # Generate yours at: https://github.com/settings/tokens
   # You can also use the name of an environment variable, or leave empty to be prompted at start.
   personal_access_token: "$GITHUB_TOKEN"
   approval:
+    # Once enabled, the "GitHub review" (case insensitive) action is available to the filters.
+    enabled: true
     # List of allowed GitHub usernames for the approval workflow
     allowed_usernames: ["unknwon"]
     # List of allowed repository names for the approval workflow
