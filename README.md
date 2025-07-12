@@ -179,9 +179,13 @@ You will get marginal performance benefit if you put `halt-on-match` ones on the
 
 The sidecar _only_ looks at unread emails.
 
-To run the sidecar once, do `gmail-blade once`. To test your filters, you can dry run with `gmail-blade once --dry-run --debug`.
+To run the sidecar once:
+- Do `gmail-blade once`. To test your filters, you can dry run with `gmail-blade once --dry-run --debug`.
+- It would be handy for quick testing by specifying a list of UIDs to scope down to with `gmail-blade once --uids 1234567890,1234567891`.
 
-To run the sidecar as a long-running service, do `gmail-blade server`, it pauses between runs (default 15s, configurable via `server.sleepInterval`). It also supports `--dry-run` and `--debug` if you want to.
+To run the sidecar as a long-running service:
+- Do `gmail-blade server`, it pauses between runs (default 15s, configurable via `server.sleepInterval`).
+- It also supports `--dry-run` and `--debug` if you want to.
 
 Use `--help` flag to get helper information on `gmail-blade` and its subcommands.
 
