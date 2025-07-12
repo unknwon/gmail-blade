@@ -19,8 +19,8 @@ type Logger interface {
 	GetLevel() log.Level
 }
 
-// slackErrorLogger wraps a Logger and sends messages at or above a specified level to Slack webhook.
-type slackErrorLogger struct {
+// slackLogger wraps a Logger and sends messages at or above a specified level to Slack webhook.
+type slackLogger struct {
 	underlying   Logger
 	webhookURL   string
 	sendLogLevel log.Level
@@ -36,59 +36,59 @@ type slackAttachment struct {
 	Text  string `json:"text"`
 }
 
-// newSlackErrorLogger creates a new slackErrorLogger that wraps the given logger.
-func newSlackErrorLogger(underlying Logger, webhookURL string, sendLogLevel log.Level) Logger {
-	return &slackErrorLogger{
+// newSlackLogger creates a new slackLogger that wraps the given logger.
+func newSlackLogger(underlying Logger, webhookURL string, sendLogLevel log.Level) Logger {
+	return &slackLogger{
 		underlying:   underlying,
 		webhookURL:   webhookURL,
 		sendLogLevel: sendLogLevel,
 	}
 }
 
-func (s *slackErrorLogger) Debug(msg interface{}, keyvals ...interface{}) {
+func (s *slackLogger) Debug(msg interface{}, keyvals ...interface{}) {
 	s.underlying.Debug(msg, keyvals...)
 	if s.sendLogLevel <= log.DebugLevel {
 		s.sendToSlack(log.DebugLevel, "DEBUG", fmt.Sprintf("%v", msg), keyvals...)
 	}
 }
 
-func (s *slackErrorLogger) Info(msg interface{}, keyvals ...interface{}) {
+func (s *slackLogger) Info(msg interface{}, keyvals ...interface{}) {
 	s.underlying.Info(msg, keyvals...)
 	if s.sendLogLevel <= log.InfoLevel {
 		s.sendToSlack(log.InfoLevel, "INFO", fmt.Sprintf("%v", msg), keyvals...)
 	}
 }
 
-func (s *slackErrorLogger) Warn(msg interface{}, keyvals ...interface{}) {
+func (s *slackLogger) Warn(msg interface{}, keyvals ...interface{}) {
 	s.underlying.Warn(msg, keyvals...)
 	if s.sendLogLevel <= log.WarnLevel {
 		s.sendToSlack(log.WarnLevel, "WARN", fmt.Sprintf("%v", msg), keyvals...)
 	}
 }
 
-func (s *slackErrorLogger) Error(msg interface{}, keyvals ...interface{}) {
+func (s *slackLogger) Error(msg interface{}, keyvals ...interface{}) {
 	s.underlying.Error(msg, keyvals...)
 	if s.sendLogLevel <= log.ErrorLevel {
 		s.sendToSlack(log.ErrorLevel, "ERROR", fmt.Sprintf("%v", msg), keyvals...)
 	}
 }
 
-func (s *slackErrorLogger) SetLevel(level log.Level) {
+func (s *slackLogger) SetLevel(level log.Level) {
 	s.underlying.SetLevel(level)
 }
 
-func (s *slackErrorLogger) GetLevel() log.Level {
+func (s *slackLogger) GetLevel() log.Level {
 	return s.underlying.GetLevel()
 }
 
-func (s *slackErrorLogger) sendToSlack(logLevel log.Level, level, msg string, keyvals ...interface{}) {
+func (s *slackLogger) sendToSlack(logLevel log.Level, level, msg string, keyvals ...interface{}) {
 	// Don't send to Slack if the message level is below the underlying logger's level
 	if logLevel < s.underlying.GetLevel() {
 		return
 	}
 	var kvStr string
-	if len(keyvals) > 0 {
-		kvStr = fmt.Sprintf(" %v", keyvals)
+	for i := 0; i < len(keyvals); i += 2 {
+		kvStr += fmt.Sprintf("%v: %v\n", keyvals[i], keyvals[i+1])
 	}
 
 	// Map log levels to Slack colors
@@ -108,7 +108,7 @@ func (s *slackErrorLogger) sendToSlack(logLevel log.Level, level, msg string, ke
 		Attachments: []slackAttachment{
 			{
 				Color: color,
-				Text:  fmt.Sprintf("gmail-blade %s: %s%s", level, msg, kvStr),
+				Text:  fmt.Sprintf("```\ngmail-blade %s: %s\n%s```", level, msg, kvStr),
 			},
 		},
 	}

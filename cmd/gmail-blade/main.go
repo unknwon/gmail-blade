@@ -79,7 +79,7 @@ func main() {
 						if err != nil {
 							return errors.Wrapf(err, "invalid slack.send_log_level %q", config.Slack.SendLogLevel)
 						}
-						logger = newSlackErrorLogger(logger, config.Slack.WebhookURL, sendLevel)
+						logger = newSlackLogger(logger, config.Slack.WebhookURL, sendLevel)
 					}
 
 					var targetUIDs map[imap.UID]struct{}
@@ -120,7 +120,7 @@ func main() {
 						if err != nil {
 							return errors.Wrapf(err, "invalid slack.send_log_level %q", config.Slack.SendLogLevel)
 						}
-						logger = newSlackErrorLogger(logger, config.Slack.WebhookURL, sendLevel)
+						logger = newSlackLogger(logger, config.Slack.WebhookURL, sendLevel)
 					}
 
 					return runServer(logger, c.Bool("dry-run"), config)
