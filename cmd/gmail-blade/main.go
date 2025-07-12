@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -48,7 +49,13 @@ func main() {
 			{
 				Name:  "once",
 				Usage: "Run once to process emails",
-				Flags: commonFlags,
+				Flags: append(
+					commonFlags,
+					&cli.StringFlag{
+						Name:  "uids",
+						Usage: "Comma-separated list of UIDs to process (if not specified, processes all unread messages)",
+					},
+				),
 				Action: func(c *cli.Context) error {
 					if c.Bool("errors-only") && c.Bool("debug") {
 						return errors.New("cannot use both --errors-only and --debug flags")
@@ -64,7 +71,15 @@ func main() {
 						return errors.Wrap(err, "parse config")
 					}
 
-					return runOnce(c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}))
+					var targetUIDs map[imap.UID]struct{}
+					if uidsStr := c.String("uids"); uidsStr != "" {
+						targetUIDs, err = parseUIDs(uidsStr)
+						if err != nil {
+							return errors.Wrap(err, "parse UIDs")
+						}
+					}
+
+					return runOnce(c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}), targetUIDs)
 				},
 			},
 			{
@@ -129,7 +144,24 @@ var (
 	githubReviewRegexp = regexp.MustCompile(`(?i)github\s+review`)
 )
 
-func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}) error {
+func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
+	uids := make(map[imap.UID]struct{})
+	parts := strings.Split(uidsStr, ",")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		uid, err := strconv.ParseUint(part, 10, 32)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid UID %q", part)
+		}
+		uids[imap.UID(uid)] = struct{}{}
+	}
+	return uids, nil
+}
+
+func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
 	client, closeClient, err := getAuthenticatedClient(config.Credentials, nil)
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
@@ -183,6 +215,14 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 			if _, ok := processedUIDs[msg.UID]; ok {
 				log.Debug("Skipped processed message", "uid", msg.UID)
 				continue
+			}
+
+			// Skip messages not in target UID list if specified
+			if len(targetUIDs) > 0 {
+				if _, ok := targetUIDs[msg.UID]; !ok {
+					log.Debug("Skipped message not in target UIDs", "uid", msg.UID)
+					continue
+				}
 			}
 
 			err = processMessage(ctx, dryRun, config, client, msg)
@@ -354,7 +394,7 @@ func runServer(dryRun bool, config *config) error {
 
 serverRoutine:
 	for {
-		err := runOnce(ctx, dryRun, config, processedUIDs)
+		err := runOnce(ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			log.Error("Failed to process messages", "error", err)
 		}
