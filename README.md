@@ -3,7 +3,6 @@
   <h3>Gmail Blade</h3>
 </div>
 
-
 ## What?
 
 Gmail Blade is a sidecar with advanced and precise filtering for your Gmail account. Utilizing the expressiveness of [`expr-lang/expr`](https://expr-lang.org/) to fully customize your Gmail experience. Make Gmail great again!
@@ -39,6 +38,20 @@ server:
   # Sleep interval between processing runs (default: 15s)
   # Uses Go duration format, e.g. "30s", "2m", "1h30m".
   sleepInterval: "15s"
+
+# Optional GitHub integration
+github:
+  # Once enabled, the "GitHub review" (case insensitive) action is available to the filters.
+  enabled: true
+  # GitHub Personal Access Token for API access
+  # Generate yours at: https://github.com/settings/tokens
+  # You can also use the name of an environment variable, or leave empty to be prompted at start.
+  personal_access_token: "$GITHUB_TOKEN"
+  approval:
+    # List of allowed GitHub usernames for the approval workflow
+    allowed_usernames: ["unknwon"]
+    # List of allowed repository names for the approval workflow
+    allowed_repositories: ["unknwon/gmail-blade"]
 
 filters:
   - name: "Delete GitHub backport notifications"
@@ -137,6 +150,7 @@ Each filter can have multiple actions that will be executed in sequence.
 | `move to "X"` | Move the message to the "X" mailbox, e.g. `move to "[Gmail]/Spam"` |
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
+| `github review` | Review GitHub pull requests (requires GitHub integration)        |
 
 Actions are defined as a list and are executed in the same order as they are defined:
 
@@ -144,6 +158,19 @@ Actions are defined as a list and are executed in the same order as they are def
 actions:
   - label "GitHub"
   - label "Processed"
+```
+
+Example of using the GitHub review action:
+
+```yaml
+- name: "Auto-approve trusted GitHub PRs"
+  condition: |
+    "notifications@github.com" in message.from and
+    message.body contains "@unknwon please stamp" and
+    "review_requested@noreply.github.com" in message.cc
+  actions:
+    - github review
+    - label "Auto-approved"
 ```
 
 You will get marginal performance benefit if you put `halt-on-match` ones on the top.

@@ -124,8 +124,9 @@ func main() {
 }
 
 var (
-	labelRegexp  = regexp.MustCompile(`label "([^"]*)"`)
-	moveToRegexp = regexp.MustCompile(`move to "([^"]*)"`)
+	labelRegexp        = regexp.MustCompile(`label "([^"]*)"`)
+	moveToRegexp       = regexp.MustCompile(`move to "([^"]*)"`)
+	githubReviewRegexp = regexp.MustCompile(`(?i)github\s+review`)
 )
 
 func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}) error {
@@ -184,7 +185,7 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 				continue
 			}
 
-			err = processMessage(dryRun, client, msg, config.Filters)
+			err = processMessage(ctx, dryRun, config, client, msg)
 			if err != nil {
 				// We need to continue processing other messages even if one fails
 				log.Error("Failed to process message", "uid", msg.UID, "error", err)
@@ -196,7 +197,7 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 	return nil
 }
 
-func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.FetchMessageBuffer, filters []configFilter) error {
+func processMessage(ctx context.Context, dryRun bool, config *config, client *imapclient.Client, msg *imapclient.FetchMessageBuffer) error {
 	// Skip read emails
 	if slices.Contains(msg.Flags, imap.FlagSeen) {
 		return nil
@@ -241,7 +242,7 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 	}
 
 	var actions []string
-	for _, f := range filters {
+	for _, f := range config.Filters {
 		result, err := expr.Run(
 			f.CompiledCondition,
 			map[string]any{
@@ -308,7 +309,7 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 			if err != nil {
 				return errors.Wrapf(err, "copy email to label %q", labelName)
 			}
-		} else if strings.HasPrefix(action, "move to ") { // todo test dry run
+		} else if strings.HasPrefix(action, "move to ") {
 			match := moveToRegexp.FindStringSubmatch(action)
 			if len(match) < 2 {
 				return errors.Errorf("invalid move to action format %q", action)
@@ -320,6 +321,11 @@ func processMessage(dryRun bool, client *imapclient.Client, msg *imapclient.Fetc
 			_, err := client.Move(uidSet, mailboxName).Wait()
 			if err != nil {
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
+			}
+		} else if config.GitHub.Enabled && githubReviewRegexp.MatchString(action) {
+			err := processGitHubReview(ctx, config.GitHub, msg.UID, body)
+			if err != nil {
+				return errors.Wrap(err, "process GitHub review action")
 			}
 		} else {
 			log.Warn("Unknown action", "action", action)

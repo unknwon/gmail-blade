@@ -5,3 +5,4 @@
 ## Build instructions
 
 - When you need to use `go build` to test builds, make sure the binary is located under `.bin` to be ignored by `.gitignore`.
+- Use `golangci-lint run ./...` to test code quality after build success.

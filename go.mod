@@ -6,8 +6,10 @@ require (
 	github.com/charmbracelet/log v0.4.2
 	github.com/emersion/go-imap/v2 v2.0.0-beta.5
 	github.com/expr-lang/expr v1.17.5
+	github.com/google/go-github/v73 v73.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli/v2 v2.27.7
+	golang.org/x/oauth2 v0.30.0
 	golang.org/x/term v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -23,6 +25,7 @@ require (
 	github.com/emersion/go-message v0.18.1 // indirect
 	github.com/emersion/go-sasl v0.0.0-20231106173351-e73c9f7bad43 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
+	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect

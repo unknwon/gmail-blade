@@ -16,6 +16,7 @@ import (
 type config struct {
 	Credentials configCredentials `yaml:"credentials"`
 	Server      configServer      `yaml:"server"`
+	GitHub      configGitHub      `yaml:"github"`
 	Filters     []configFilter    `yaml:"filters"`
 }
 
@@ -26,6 +27,17 @@ type configCredentials struct {
 
 type configServer struct {
 	SleepInterval string `yaml:"sleepInterval"`
+}
+
+type configGitHub struct {
+	Enabled             bool                 `yaml:"enabled"`
+	PersonalAccessToken string               `yaml:"personal_access_token"`
+	Approval            configGitHubApproval `yaml:"approval"`
+}
+
+type configGitHubApproval struct {
+	AllowedUsernames    []string `yaml:"allowed_usernames"`
+	AllowedRepositories []string `yaml:"allowed_repositories"`
 }
 
 type configFilter struct {
@@ -49,7 +61,6 @@ func parseConfig(path string) (*config, error) {
 
 	// Allow environment variable override for password
 	c.Credentials.Password = os.ExpandEnv(c.Credentials.Password)
-
 	// Prompt for password if empty
 	if c.Credentials.Password == "" {
 		fmt.Print("Password: ")
@@ -61,22 +72,51 @@ func parseConfig(path string) (*config, error) {
 		c.Credentials.Password = string(password)
 	}
 
+	// Set default server sleep interval if not configured
+	if c.Server.SleepInterval == "" {
+		c.Server.SleepInterval = "15s"
+	}
+	// Validate sleep interval duration
+	if _, err := time.ParseDuration(c.Server.SleepInterval); err != nil {
+		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
+	}
+
+	if c.GitHub.Enabled {
+		// Allow environment variable override for GitHub personal access token
+		c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
+		// Prompt for GitHub personal access token if empty
+		if c.GitHub.PersonalAccessToken == "" {
+			fmt.Print("GitHub Personal Access Token: ")
+			token, err := term.ReadPassword(syscall.Stdin)
+			if err != nil {
+				return nil, errors.Wrap(err, "read GitHub personal access token")
+			}
+			fmt.Println()
+			c.GitHub.PersonalAccessToken = string(token)
+		}
+
+		// Validate GitHub approval allowlists are not empty
+		if len(c.GitHub.Approval.AllowedUsernames) == 0 {
+			return nil, errors.New("github.approval.allowed_usernames cannot be empty")
+		}
+		if len(c.GitHub.Approval.AllowedRepositories) == 0 {
+			return nil, errors.New("github.approval.allowed_repositories cannot be empty")
+		}
+	}
+
 	for i, f := range c.Filters {
 		program, err := expr.Compile(f.Condition)
 		if err != nil {
 			return nil, errors.Wrapf(err, "compile condition for filter %q", f.Name)
 		}
 		c.Filters[i].CompiledCondition = program
-	}
 
-	// Set default server sleep interval if not configured
-	if c.Server.SleepInterval == "" {
-		c.Server.SleepInterval = "15s"
-	}
-
-	// Validate sleep interval duration
-	if _, err := time.ParseDuration(c.Server.SleepInterval); err != nil {
-		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
+		// Check if this filter uses GitHub review action
+		for _, action := range f.Actions {
+			if githubReviewRegexp.MatchString(action) && !c.GitHub.Enabled {
+				return nil, errors.Errorf("GitHub review action is used in filter %q but GitHub integration is not enabled", f.Name)
+			}
+		}
 	}
 
 	return &c, nil
