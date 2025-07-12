@@ -60,15 +60,26 @@ func main() {
 					if c.Bool("errors-only") && c.Bool("debug") {
 						return errors.New("cannot use both --errors-only and --debug flags")
 					}
+
+					var logger Logger = log.New(os.Stderr)
 					if c.Bool("debug") {
-						log.SetLevel(log.DebugLevel)
+						logger.SetLevel(log.DebugLevel)
 					} else if c.Bool("errors-only") {
-						log.SetLevel(log.ErrorLevel)
+						logger.SetLevel(log.ErrorLevel)
 					}
 
 					config, err := parseConfig(c.String("config"))
 					if err != nil {
 						return errors.Wrap(err, "parse config")
+					}
+
+					// Wrap logger with Slack integration if configured
+					if config.Slack.SendLogLevel != "" {
+						sendLevel, err := log.ParseLevel(config.Slack.SendLogLevel)
+						if err != nil {
+							return errors.Wrapf(err, "invalid slack.send_log_level %q", config.Slack.SendLogLevel)
+						}
+						logger = newSlackErrorLogger(logger, config.Slack.WebhookURL, sendLevel)
 					}
 
 					var targetUIDs map[imap.UID]struct{}
@@ -79,7 +90,7 @@ func main() {
 						}
 					}
 
-					return runOnce(c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}), targetUIDs)
+					return runOnce(logger, c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}), targetUIDs)
 				},
 			},
 			{
@@ -90,10 +101,12 @@ func main() {
 					if c.Bool("errors-only") && c.Bool("debug") {
 						return errors.New("cannot use both --errors-only and --debug flags")
 					}
+
+					var logger Logger = log.New(os.Stderr)
 					if c.Bool("debug") {
-						log.SetLevel(log.DebugLevel)
+						logger.SetLevel(log.DebugLevel)
 					} else if c.Bool("errors-only") {
-						log.SetLevel(log.ErrorLevel)
+						logger.SetLevel(log.ErrorLevel)
 					}
 
 					config, err := parseConfig(c.String("config"))
@@ -101,7 +114,16 @@ func main() {
 						return errors.Wrap(err, "parse config")
 					}
 
-					return runServer(c.Bool("dry-run"), config)
+					// Wrap logger with Slack integration if configured
+					if config.Slack.SendLogLevel != "" {
+						sendLevel, err := log.ParseLevel(config.Slack.SendLogLevel)
+						if err != nil {
+							return errors.Wrapf(err, "invalid slack.send_log_level %q", config.Slack.SendLogLevel)
+						}
+						logger = newSlackErrorLogger(logger, config.Slack.WebhookURL, sendLevel)
+					}
+
+					return runServer(logger, c.Bool("dry-run"), config)
 				},
 			},
 			{
@@ -119,15 +141,16 @@ func main() {
 					},
 				},
 				Action: func(c *cli.Context) error {
+					logger := log.New(os.Stderr)
 					if c.Bool("debug") {
-						log.SetLevel(log.DebugLevel)
+						logger.SetLevel(log.DebugLevel)
 					}
 
 					config, err := parseConfig(c.String("config"))
 					if err != nil {
 						return errors.Wrap(err, "parse config")
 					}
-					return runListMailboxes(config)
+					return runListMailboxes(logger, config)
 				},
 			},
 		},
@@ -161,7 +184,7 @@ func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
 	return uids, nil
 }
 
-func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
+func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
 	client, closeClient, err := getAuthenticatedClient(config.Credentials, nil)
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
@@ -201,7 +224,7 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 			return errors.Wrap(err, "fetch messages")
 		}
 		if len(messages) == 0 {
-			log.Info("No more unread messages found")
+			logger.Info("No more unread messages found")
 			break
 		}
 
@@ -213,22 +236,22 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 			}
 
 			if _, ok := processedUIDs[msg.UID]; ok {
-				log.Debug("Skipped processed message", "uid", msg.UID)
+				logger.Debug("Skipped processed message", "uid", msg.UID)
 				continue
 			}
 
 			// Skip messages not in target UID list if specified
 			if len(targetUIDs) > 0 {
 				if _, ok := targetUIDs[msg.UID]; !ok {
-					log.Debug("Skipped message not in target UIDs", "uid", msg.UID)
+					logger.Debug("Skipped message not in target UIDs", "uid", msg.UID)
 					continue
 				}
 			}
 
-			err = processMessage(ctx, dryRun, config, client, msg)
+			err = processMessage(logger, ctx, dryRun, config, client, msg)
 			if err != nil {
 				// We need to continue processing other messages even if one fails
-				log.Error("Failed to process message", "uid", msg.UID, "error", err)
+				logger.Error("Failed to process message", "uid", msg.UID, "error", err)
 			} else {
 				processedUIDs[msg.UID] = struct{}{}
 			}
@@ -237,7 +260,7 @@ func runOnce(ctx context.Context, dryRun bool, config *config, processedUIDs map
 	return nil
 }
 
-func processMessage(ctx context.Context, dryRun bool, config *config, client *imapclient.Client, msg *imapclient.FetchMessageBuffer) error {
+func processMessage(logger Logger, ctx context.Context, dryRun bool, config *config, client *imapclient.Client, msg *imapclient.FetchMessageBuffer) error {
 	// Skip read emails
 	if slices.Contains(msg.Flags, imap.FlagSeen) {
 		return nil
@@ -265,7 +288,7 @@ func processMessage(ctx context.Context, dryRun bool, config *config, client *im
 		replyTo = append(replyTo, fmt.Sprintf("%s@%s", replyToAddr.Mailbox, replyToAddr.Host))
 	}
 
-	log.Debug(
+	logger.Debug(
 		"Unread message",
 		"uid", msg.UID,
 		"from", from,
@@ -297,19 +320,19 @@ func processMessage(ctx context.Context, dryRun bool, config *config, client *im
 				},
 			})
 		if err != nil {
-			log.Error("Failed to run expression", "error", err)
+			logger.Error("Failed to run expression", "error", err)
 		}
 		if fmt.Sprintf("%v", result) == "true" {
 			actions = append(actions, f.Actions...)
 			if f.HaltOnMatch {
-				log.Debug("Halt on match", "uid", msg.UID, "filter", f.Name)
+				logger.Debug("Halt on match", "uid", msg.UID, "filter", f.Name)
 				break
 			}
 		}
 	}
 
 	if len(actions) == 0 {
-		log.Debug(
+		logger.Debug(
 			"No actions matched",
 			"uid", msg.UID,
 			"subject", msg.Envelope.Subject,
@@ -317,7 +340,7 @@ func processMessage(ctx context.Context, dryRun bool, config *config, client *im
 		return nil
 	}
 
-	log.Info(
+	logger.Info(
 		"Actions matched",
 		"uid", msg.UID,
 		"subject", msg.Envelope.Subject,
@@ -363,18 +386,18 @@ func processMessage(ctx context.Context, dryRun bool, config *config, client *im
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
 		} else if config.GitHub.Enabled && githubReviewRegexp.MatchString(action) {
-			err := processGitHubReview(ctx, config.GitHub, msg.UID, body)
+			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, body)
 			if err != nil {
 				return errors.Wrap(err, "process GitHub review action")
 			}
 		} else {
-			log.Warn("Unknown action", "action", action)
+			logger.Warn("Unknown action", "action", action)
 		}
 	}
 	return nil
 }
 
-func runServer(dryRun bool, config *config) error {
+func runServer(logger Logger, dryRun bool, config *config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -384,19 +407,19 @@ func runServer(dryRun bool, config *config) error {
 
 	go func() {
 		<-sigChan
-		log.Info("Received SIGTERM, shutting down")
+		logger.Info("Received SIGTERM, shutting down")
 		cancel()
 	}()
-	log.Info("Server started (press Ctrl+C to stop)")
+	logger.Info("Server started (press Ctrl+C to stop)")
 
 	processedUIDs := make(map[imap.UID]struct{})
 	sleepInterval, _ := time.ParseDuration(config.Server.SleepInterval)
 
 serverRoutine:
 	for {
-		err := runOnce(ctx, dryRun, config, processedUIDs, nil)
+		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			log.Error("Failed to process messages", "error", err)
+			logger.Error("Failed to process messages", "error", err)
 		}
 
 		select {
@@ -406,11 +429,11 @@ serverRoutine:
 		}
 	}
 
-	log.Info("Server stopped")
+	logger.Info("Server stopped")
 	return nil
 }
 
-func runListMailboxes(config *config) error {
+func runListMailboxes(logger Logger, config *config) error {
 	client, closeClient, err := getAuthenticatedClient(config.Credentials, nil)
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
@@ -425,7 +448,7 @@ func runListMailboxes(config *config) error {
 	for i, mailbox := range mailboxList {
 		mailboxes[i] = mailbox.Mailbox
 	}
-	log.Info("Found mailboxes", "mailboxes", strings.Join(mailboxes, "\n"))
+	logger.Info("Found mailboxes", "mailboxes", strings.Join(mailboxes, "\n"))
 	return nil
 }
 

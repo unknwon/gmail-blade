@@ -17,6 +17,7 @@ type config struct {
 	Credentials configCredentials `yaml:"credentials"`
 	Server      configServer      `yaml:"server"`
 	GitHub      configGitHub      `yaml:"github"`
+	Slack       configSlack       `yaml:"slack"`
 	Filters     []configFilter    `yaml:"filters"`
 }
 
@@ -38,6 +39,11 @@ type configGitHub struct {
 type configGitHubApproval struct {
 	AllowedUsernames    []string `yaml:"allowed_usernames"`
 	AllowedRepositories []string `yaml:"allowed_repositories"`
+}
+
+type configSlack struct {
+	WebhookURL   string `yaml:"webhook_url"`
+	SendLogLevel string `yaml:"send_log_level"`
 }
 
 type configFilter struct {
@@ -102,6 +108,11 @@ func parseConfig(path string) (*config, error) {
 		if len(c.GitHub.Approval.AllowedRepositories) == 0 {
 			return nil, errors.New("github.approval.allowed_repositories cannot be empty")
 		}
+	}
+
+	// Validate Slack configuration
+	if c.Slack.SendLogLevel != "" && c.Slack.WebhookURL == "" {
+		return nil, errors.New("slack.webhook_url cannot be empty when slack.send_log_level is set")
 	}
 
 	for i, f := range c.Filters {

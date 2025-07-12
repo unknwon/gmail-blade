@@ -53,6 +53,15 @@ github:
     # List of allowed repository names for the approval workflow
     allowed_repositories: ["unknwon/gmail-blade"]
 
+# Optional Slack integration
+slack:
+  # Slack webhook URL for incoming webhooks
+  # When webhook_url is not defined, the integration is considered disabled.
+  webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  # Log level for messages to send to Slack (empty = disabled)
+  # Valid levels: debug, info, warn, error (case-insensitive)
+  send_log_level: "error"
+
 filters:
   - name: "Delete GitHub backport notifications"
     condition: |

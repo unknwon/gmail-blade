@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/charmbracelet/log"
 	"github.com/emersion/go-imap/v2"
 	"github.com/google/go-github/v73/github"
 	"github.com/pkg/errors"
@@ -46,18 +45,18 @@ func parseGitHubNotification(body string) (*githubPR, error) {
 }
 
 // processGitHubReview handles the "github review" action.
-func processGitHubReview(ctx context.Context, config configGitHub, uid imap.UID, body string) error {
+func processGitHubReview(logger Logger, ctx context.Context, config configGitHub, uid imap.UID, body string) error {
 	parsedPullRequest, err := parseGitHubNotification(body)
 	if err != nil {
 		return errors.Wrap(err, "parse GitHub notification")
 	}
 
 	repoFullName := parsedPullRequest.Owner + "/" + parsedPullRequest.Repo
-	log.Debug("Found GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+	logger.Debug("Found GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
 
 	// Check if repository is allowed
 	if !slices.Contains(config.Approval.AllowedRepositories, repoFullName) {
-		log.Warn("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
+		logger.Warn("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
 		return nil
 	}
 
@@ -75,11 +74,11 @@ func processGitHubReview(ctx context.Context, config configGitHub, uid imap.UID,
 	}
 
 	author := pullRequest.GetUser().GetLogin()
-	log.Debug("Found pull request author", "uid", uid, "author", author)
+	logger.Debug("Found pull request author", "uid", uid, "author", author)
 
 	// Check if author is allowed
 	if !slices.Contains(config.Approval.AllowedUsernames, author) {
-		log.Warn("Author not in allowed list", "uid", uid, "author", author, "allowed", config.Approval.AllowedUsernames)
+		logger.Warn("Author not in allowed list", "uid", uid, "author", author, "allowed", config.Approval.AllowedUsernames)
 		return nil
 	}
 
@@ -97,7 +96,7 @@ func processGitHubReview(ctx context.Context, config configGitHub, uid imap.UID,
 
 	for _, review := range reviews {
 		if review.GetUser().GetLogin() == currentUser.GetLogin() && review.GetState() == "APPROVED" {
-			log.Debug("Already approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+			logger.Debug("Already approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
 			return nil
 		}
 	}
@@ -112,6 +111,6 @@ func processGitHubReview(ctx context.Context, config configGitHub, uid imap.UID,
 		return errors.Wrapf(err, "approve GitHub pull request %s#%d", repoFullName, parsedPullRequest.Number)
 	}
 
-	log.Info("Successfully approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+	logger.Info("Successfully approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
 	return nil
 }

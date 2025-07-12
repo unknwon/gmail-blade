@@ -1,6 +1,6 @@
 ## Core principles
 
-- When you see changes made outside your knowledge, use the current version as your new starting point. Do not blindly overwrite those changes or you sucks.
+- When you see changes made outside your knowledge, use the current version as your new starting point. Do not blindly overwrite those changes or you sucks. Even if you have to update the code, please god damn respect the pattern, order, whatever!
 
 ## Build instructions
 
