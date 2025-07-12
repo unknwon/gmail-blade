@@ -224,7 +224,7 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 			return errors.Wrap(err, "fetch messages")
 		}
 		if len(messages) == 0 {
-			logger.Info("No more unread messages found")
+			logger.Debug("No more unread messages found")
 			break
 		}
 
