@@ -31,12 +31,12 @@ type configServer struct {
 }
 
 type configGitHub struct {
-	Enabled             bool                 `yaml:"enabled"`
 	PersonalAccessToken string               `yaml:"personal_access_token"`
 	Approval            configGitHubApproval `yaml:"approval"`
 }
 
 type configGitHubApproval struct {
+	Enabled             bool     `yaml:"enabled"`
 	AllowedUsernames    []string `yaml:"allowed_usernames"`
 	AllowedRepositories []string `yaml:"allowed_repositories"`
 }
@@ -87,9 +87,10 @@ func parseConfig(path string) (*config, error) {
 		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
 	}
 
-	if c.GitHub.Enabled {
-		// Allow environment variable override for GitHub personal access token
-		c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
+	// Allow environment variable override for GitHub personal access token
+	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
+
+	if c.GitHub.Approval.Enabled {
 		// Prompt for GitHub personal access token if empty
 		if c.GitHub.PersonalAccessToken == "" {
 			fmt.Print("GitHub Personal Access Token: ")
@@ -124,7 +125,7 @@ func parseConfig(path string) (*config, error) {
 
 		// Check if this filter uses GitHub review action
 		for _, action := range f.Actions {
-			if githubReviewRegexp.MatchString(action) && !c.GitHub.Enabled {
+			if githubReviewRegexp.MatchString(action) && !c.GitHub.Approval.Enabled {
 				return nil, errors.Errorf("GitHub review action is used in filter %q but GitHub integration is not enabled", f.Name)
 			}
 		}

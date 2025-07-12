@@ -385,7 +385,7 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 			if err != nil {
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
-		} else if config.GitHub.Enabled && githubReviewRegexp.MatchString(action) {
+		} else if config.GitHub.Approval.Enabled && githubReviewRegexp.MatchString(action) {
 			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, body)
 			if err != nil {
 				return errors.Wrap(err, "process GitHub review action")
