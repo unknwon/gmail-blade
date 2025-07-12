@@ -166,7 +166,7 @@ Example of using the GitHub review action:
 - name: "Auto-approve trusted GitHub PRs"
   condition: |
     "notifications@github.com" in message.from and
-    message.body contains "@unknwon please stamp"
+    message.body contains "joe please stamp"
   actions:
     - github review
     - label "Auto-approved"
