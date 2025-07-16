@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/4c01a935-42e2-432d-b25e-b708a471dcae">
+  <img width="256" height="256" src="https://github.com/user-attachments/assets/f1deb9d7-c68d-4b9d-975c-6996ae3656ff">
   <h3>Gmail Blade</h3>
 </div>
 
