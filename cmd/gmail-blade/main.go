@@ -162,9 +162,10 @@ func main() {
 }
 
 var (
-	labelRegexp        = regexp.MustCompile(`label "([^"]*)"`)
-	moveToRegexp       = regexp.MustCompile(`move to "([^"]*)"`)
-	githubReviewRegexp = regexp.MustCompile(`(?i)github\s+review`)
+	labelRegexp             = regexp.MustCompile(`label "([^"]*)"`)
+	moveToRegexp            = regexp.MustCompile(`move to "([^"]*)"`)
+	githubReviewRegexp      = regexp.MustCompile(`(?i)github\s+review`)
+	githubPullRequestRegexp = regexp.MustCompile(`(?i)github\s+pull\s+request`)
 )
 
 func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
@@ -260,6 +261,12 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 	return nil
 }
 
+const prefetchGitHubPullRequestKey = "githubPullRequest"
+
+type enver interface {
+	Env() map[string]any
+}
+
 func processMessage(logger Logger, ctx context.Context, dryRun bool, config *config, client *imapclient.Client, msg *imapclient.FetchMessageBuffer) error {
 	// Skip read emails
 	if slices.Contains(msg.Flags, imap.FlagSeen) {
@@ -304,21 +311,42 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 		body += string(b.Bytes)
 	}
 
+	prefetchData := make(map[string]enver)
 	var actions []string
 	for _, f := range config.Filters {
-		result, err := expr.Run(
-			f.CompiledCondition,
-			map[string]any{
-				"message": map[string]any{
-					"from":     from,
-					"fromName": fromName,
-					"subject":  msg.Envelope.Subject,
-					"cc":       cc,
-					"to":       to,
-					"replyTo":  replyTo,
-					"body":     body,
-				},
-			})
+		// Execute prefetches and collect prefetch data
+		for _, prefetch := range f.Prefetches {
+			if githubPullRequestRegexp.MatchString(prefetch) &&
+				githubPullRequestURLRegex.MatchString(body) &&
+				prefetchData[prefetchGitHubPullRequestKey] == nil {
+				// Only execute prefetch for GitHub pull request notifications
+				if githubPullRequestURLRegex.MatchString(body) {
+					prData, err := executePrefetchGitHubPullRequest(logger, ctx, config.GitHub, body)
+					if err != nil {
+						logger.Error("Failed to execute GitHub pull request prefetch", "error", err)
+						continue
+					}
+					prefetchData[prefetchGitHubPullRequestKey] = prData
+				}
+			}
+		}
+
+		env := map[string]any{
+			"message": map[string]any{
+				"from":     from,
+				"fromName": fromName,
+				"subject":  msg.Envelope.Subject,
+				"cc":       cc,
+				"to":       to,
+				"replyTo":  replyTo,
+				"body":     body,
+			},
+		}
+		for key, value := range prefetchData {
+			env[key] = value.Env()
+		}
+
+		result, err := expr.Run(f.CompiledCondition, env)
 		if err != nil {
 			logger.Error("Failed to run expression", "error", err)
 		}
@@ -344,7 +372,7 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 		"Actions matched",
 		"uid", msg.UID,
 		"subject", msg.Envelope.Subject,
-		"actions", actions,
+		"actions", strings.Join(actions, ", "),
 		"dryRun", dryRun,
 	)
 	if dryRun {
@@ -386,7 +414,7 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
 		} else if config.GitHub.Approval.Enabled && githubReviewRegexp.MatchString(action) {
-			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, body)
+			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, prefetchData)
 			if err != nil {
 				return errors.Wrap(err, "process GitHub review action")
 			}
@@ -407,7 +435,7 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 
 	go func() {
 		<-sigChan
-		logger.Info("Received SIGTERM, shutting down")
+		logger.Debug("Received SIGTERM, shutting down")
 		cancel()
 	}()
 	logger.Info("Server started (press Ctrl+C to stop)")

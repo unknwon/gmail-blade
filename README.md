@@ -124,6 +124,29 @@ filters:
       - label "Google Docs"
 ```
 
+#### Prefetches
+
+Prefetches allow you to fetch data before evaluating filter conditions and use them as objects in conditions. They are executed in the order they are defined and their data can be used by actions. Failure of prefetches will not halt the execution of the filter but result in empty values for conditions and actions.
+
+```yaml
+filters:
+  - name: "Auto-approve trusted GitHub PRs"
+    prefetches:
+      - github pull request
+    condition: |
+      "notifications@github.com" in message.from and
+      message.body contains "joe please stamp"
+    actions:
+      - github review
+      - label "Auto-approved"
+```
+
+Available prefetches:
+
+| Name | Description |
+|----------|-------------|
+| `github pull request` | Fetches GitHub pull request data for the notification (requires GitHub integration, case insensitive) |
+
 #### Condition expression
 
 Please refer to [`expr-lang/expr`](https://expr-lang.org/) for the syntax manual, available variables are as follows:
@@ -131,6 +154,7 @@ Please refer to [`expr-lang/expr`](https://expr-lang.org/) for the syntax manual
 | Name      | Type      | Description       |
 |-----------|-----------|-------------------|
 | `message` | `Message` | The email message |
+| `githubPullRequest` | `GitHubPullRequest` | Only available when prefetched with "GitHub pull request" |
 
 Type `Message`:
 
@@ -143,6 +167,15 @@ Type `Message`:
 | `to`       | `[]string` | The list of `to` addresses, e.g. `["acme@noreply.github.com"]`                             |
 | `replyTo`  | `[]string` | The list of `replyTo` addresses, e.g. `["joe@acme.com"]` |
 | `body`     | `string`   | The email body                                                                             |
+
+Type `GitHubPullRequest`:
+
+| Name       | Type       | Description                                                                                |
+|------------|------------|--------------------------------------------------------------------------------------------|
+| `owner`     | `string` | GitHub repository owner, e.g. `"unknwon"`                          |
+| `name` | `string` | GitHub repository name, e.g. `"gmail-blade"`                                              |
+| `number`  | `number`   | Pull request number, e.g. `12`                                                  |
+| `author`       | `string` | Pull request author username, e.g. `"unknwon"` |
 
 If `halt-on-match` is `true`, then it will be the last action to take upon matching.
 
@@ -159,7 +192,7 @@ Each filter can have multiple actions that will be executed in sequence.
 | `move to "X"` | Move the message to the "X" mailbox, e.g. `move to "[Gmail]/Spam"` |
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
-| `github review` | Review GitHub pull requests (requires GitHub integration)        |
+| `github review` | Review GitHub pull requests (requires GitHub integration and "GitHub pull request" prefetch, case insensitive) |
 
 Actions are defined as a list and are executed in the same order as they are defined:
 
@@ -173,6 +206,8 @@ Example of using the GitHub review action:
 
 ```yaml
 - name: "Auto-approve trusted GitHub PRs"
+  prefetches:
+    - github pull request
   condition: |
     "notifications@github.com" in message.from and
     message.body contains "joe please stamp"

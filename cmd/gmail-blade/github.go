@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -12,80 +13,119 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// githubPR represents a parsed GitHub pull request from an email notification.
-type githubPR struct {
-	Owner  string
-	Repo   string
-	Number int
+// githubPullRequest contains GitHub pull request of an email notification.
+type githubPullRequest struct {
+	Owner  string `json:"owner"`
+	Repo   string `json:"repo"`
+	Number int    `json:"number"`
+	Author string `json:"author"`
+}
+
+func (pr *githubPullRequest) Env() map[string]any {
+	return map[string]any{
+		"owner":  pr.Owner,
+		"repo":   pr.Repo,
+		"number": pr.Number,
+		"author": pr.Author,
+	}
 }
 
 // GitHub pull request URLs follow the pattern: https://github.com/owner/repo/pull/123
 var githubPullRequestURLRegex = regexp.MustCompile(`https://github\.com/([^/]+)/([^/]+)/pull/(\d+)`)
 
-// parseGitHubNotification extracts GitHub PR information from email content.
-func parseGitHubNotification(body string) (*githubPR, error) {
+// parseGitHubNotification extracts GitHub pull request information from email content.
+func parseGitHubNotification(body string) (owner, repo string, number int, err error) {
 	// Try to find PR URL in body
 	matches := githubPullRequestURLRegex.FindStringSubmatch(body)
 	if len(matches) < 4 {
-		return nil, errors.New("could not find GitHub pull request URL in email")
+		return "", "", 0, errors.New("could not find GitHub pull request URL in email")
 	}
 
-	owner := matches[1]
-	repo := matches[2]
-	prNumber, err := strconv.Atoi(matches[3])
+	owner = matches[1]
+	repo = matches[2]
+	number, err = strconv.Atoi(matches[3])
 	if err != nil {
-		return nil, errors.Wrapf(err, "parse pull request number %q", matches[3])
+		return "", "", 0, errors.Wrapf(err, "parse pull request number %q", matches[3])
 	}
-
-	return &githubPR{
-		Owner:  owner,
-		Repo:   repo,
-		Number: prNumber,
-	}, nil
+	return owner, repo, number, nil
 }
 
-// processGitHubReview handles the "github review" action.
-func processGitHubReview(logger Logger, ctx context.Context, config configGitHub, uid imap.UID, body string) error {
-	parsedPullRequest, err := parseGitHubNotification(body)
+func newGitHubClient(ctx context.Context, pat string) *github.Client {
+	return github.NewClient(
+		oauth2.NewClient(
+			ctx,
+			oauth2.StaticTokenSource(
+				&oauth2.Token{AccessToken: pat},
+			),
+		),
+	)
+}
+
+var githubPullRequestCache = make(map[string]*githubPullRequest)
+
+// executePrefetchGitHubPullRequest fetches GitHub pull request data for prefetch.
+func executePrefetchGitHubPullRequest(logger Logger, ctx context.Context, config configGitHub, body string) (*githubPullRequest, error) {
+	owner, repo, number, err := parseGitHubNotification(body)
 	if err != nil {
-		return errors.Wrap(err, "parse GitHub notification")
+		return nil, errors.Wrap(err, "parse GitHub notification")
 	}
 
-	repoFullName := parsedPullRequest.Owner + "/" + parsedPullRequest.Repo
-	logger.Debug("Found GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+	client := newGitHubClient(ctx, config.PersonalAccessToken)
+
+	// Get pull request details
+	cacheKey := fmt.Sprintf("%s/%s#%d", owner, repo, number)
+	if pullRequest, ok := githubPullRequestCache[cacheKey]; ok {
+		fmt.Println("cache hit!!")
+		return pullRequest, nil
+	}
+	apiPullRequest, resp, err := client.PullRequests.Get(ctx, owner, repo, number)
+	if err != nil {
+		return nil, errors.Wrapf(err, "get GitHub pull request %s/%s#%d", owner, repo, number)
+	}
+	xRatelimitRemaining, _ := strconv.Atoi(resp.Header.Get("X-Ratelimit-Remaining"))
+	if xRatelimitRemaining < 500 {
+		logger.Warn("GitHub API rate limit quota is low", "remaining", xRatelimitRemaining)
+	}
+
+	author := apiPullRequest.GetUser().GetLogin()
+	logger.Debug("Prefetched GitHub pull request data", "repo", owner+"/"+repo, "pr", number, "author", author)
+
+	pullRequest := &githubPullRequest{
+		Owner:  owner,
+		Repo:   repo,
+		Number: number,
+		Author: author,
+	}
+	githubPullRequestCache[cacheKey] = pullRequest
+	return pullRequest, nil
+}
+
+// processGitHubReview handles the "github review" action with prefetch data.
+func processGitHubReview(logger Logger, ctx context.Context, config configGitHub, uid imap.UID, prefetchData map[string]enver) error {
+	prData, ok := prefetchData[prefetchGitHubPullRequestKey].(*githubPullRequest)
+	if !ok {
+		return errors.New("invalid GitHub pull request prefetch data type")
+	}
 
 	// Check if repository is allowed
+	repoFullName := prData.Owner + "/" + prData.Repo
 	if !slices.Contains(config.Approval.AllowedRepositories, repoFullName) {
 		logger.Warn("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
 		return nil
 	}
 
-	// Create GitHub client
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: config.PersonalAccessToken},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
-
-	// Get pull request author
-	pullRequest, _, err := client.PullRequests.Get(ctx, parsedPullRequest.Owner, parsedPullRequest.Repo, parsedPullRequest.Number)
-	if err != nil {
-		return errors.Wrapf(err, "get GitHub pull request %s#%d", repoFullName, parsedPullRequest.Number)
-	}
-
-	author := pullRequest.GetUser().GetLogin()
-	logger.Debug("Found pull request author", "uid", uid, "author", author)
-
 	// Check if author is allowed
-	if !slices.Contains(config.Approval.AllowedUsernames, author) {
-		logger.Warn("Author not in allowed list", "uid", uid, "author", author, "allowed", config.Approval.AllowedUsernames)
+	if !slices.Contains(config.Approval.AllowedUsernames, prData.Author) {
+		logger.Warn("Author not in allowed list", "uid", uid, "author", prData.Author, "allowed", config.Approval.AllowedUsernames)
 		return nil
 	}
 
+	client := newGitHubClient(ctx, config.PersonalAccessToken)
+
 	// Check if already approved by current user
-	reviews, _, err := client.PullRequests.ListReviews(ctx, parsedPullRequest.Owner, parsedPullRequest.Repo, parsedPullRequest.Number, nil)
+	reviews, _, err := client.PullRequests.ListReviews(ctx, prData.Owner, prData.Repo, prData.Number, nil)
 	if err != nil {
-		return errors.Wrapf(err, "list reviews for GitHub pull request %s#%d", repoFullName, parsedPullRequest.Number)
+		return errors.Wrapf(err, "list reviews for GitHub pull request %s#%d", repoFullName, prData.Number)
 	}
 
 	// Get current user to check for existing approval
@@ -96,7 +136,7 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 
 	for _, review := range reviews {
 		if review.GetUser().GetLogin() == currentUser.GetLogin() && review.GetState() == "APPROVED" {
-			logger.Debug("Already approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+			logger.Debug("Already approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", prData.Number)
 			return nil
 		}
 	}
@@ -106,11 +146,11 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 		Event: github.Ptr("APPROVE"),
 	}
 
-	_, _, err = client.PullRequests.CreateReview(ctx, parsedPullRequest.Owner, parsedPullRequest.Repo, parsedPullRequest.Number, review)
+	_, _, err = client.PullRequests.CreateReview(ctx, prData.Owner, prData.Repo, prData.Number, review)
 	if err != nil {
-		return errors.Wrapf(err, "approve GitHub pull request %s#%d", repoFullName, parsedPullRequest.Number)
+		return errors.Wrapf(err, "approve GitHub pull request %s#%d", repoFullName, prData.Number)
 	}
 
-	logger.Info("Successfully approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", parsedPullRequest.Number)
+	logger.Info("Successfully approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", prData.Number)
 	return nil
 }

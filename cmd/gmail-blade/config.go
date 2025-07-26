@@ -48,6 +48,7 @@ type configSlack struct {
 
 type configFilter struct {
 	Name              string      `yaml:"name"`
+	Prefetches        []string    `yaml:"prefetches"`
 	Condition         string      `yaml:"condition"`
 	CompiledCondition *vm.Program `yaml:"-"`
 	Actions           []string    `yaml:"actions"`
@@ -90,18 +91,35 @@ func parseConfig(path string) (*config, error) {
 	// Allow environment variable override for GitHub personal access token
 	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
 
+	// Check if GitHub PAT is required
+	var requireGitHubPAT bool
 	if c.GitHub.Approval.Enabled {
-		// Prompt for GitHub personal access token if empty
-		if c.GitHub.PersonalAccessToken == "" {
-			fmt.Print("GitHub Personal Access Token: ")
-			token, err := term.ReadPassword(syscall.Stdin)
-			if err != nil {
-				return nil, errors.Wrap(err, "read GitHub personal access token")
+		requireGitHubPAT = true
+	} else {
+		// Check if any filter uses GitHub pull request prefetch
+	loop:
+		for _, f := range c.Filters {
+			for _, prefetch := range f.Prefetches {
+				if githubPullRequestRegexp.MatchString(prefetch) {
+					requireGitHubPAT = true
+					break loop
+				}
 			}
-			fmt.Println()
-			c.GitHub.PersonalAccessToken = string(token)
 		}
+	}
 
+	// Prompt for GitHub personal access token if required but empty.
+	if requireGitHubPAT && c.GitHub.PersonalAccessToken == "" {
+		fmt.Print("GitHub Personal Access Token: ")
+		token, err := term.ReadPassword(syscall.Stdin)
+		if err != nil {
+			return nil, errors.Wrap(err, "read GitHub personal access token")
+		}
+		fmt.Println()
+		c.GitHub.PersonalAccessToken = string(token)
+	}
+
+	if c.GitHub.Approval.Enabled {
 		// Validate GitHub approval allowlists are not empty
 		if len(c.GitHub.Approval.AllowedUsernames) == 0 {
 			return nil, errors.New("github.approval.allowed_usernames cannot be empty")
@@ -124,9 +142,27 @@ func parseConfig(path string) (*config, error) {
 		c.Filters[i].CompiledCondition = program
 
 		// Check if this filter uses GitHub review action
+		var hasGitHubReviewAction bool
 		for _, action := range f.Actions {
-			if githubReviewRegexp.MatchString(action) && !c.GitHub.Approval.Enabled {
-				return nil, errors.Errorf("GitHub review action is used in filter %q but GitHub integration is not enabled", f.Name)
+			if githubReviewRegexp.MatchString(action) {
+				hasGitHubReviewAction = true
+				if !c.GitHub.Approval.Enabled {
+					return nil, errors.Errorf("GitHub review action is used in filter %q but GitHub integration is not enabled", f.Name)
+				}
+			}
+		}
+
+		// Make sure GitHub pull request prefetch exists because GitHub review action requires it.
+		if hasGitHubReviewAction {
+			hasGitHubPullRequestPrefetch := false
+			for _, prefetch := range f.Prefetches {
+				if githubPullRequestRegexp.MatchString(prefetch) {
+					hasGitHubPullRequestPrefetch = true
+					break
+				}
+			}
+			if !hasGitHubPullRequestPrefetch {
+				return nil, errors.Errorf(`"GitHub review" action in filter %q requires "GitHub pull request" prefetch`, f.Name)
 			}
 		}
 	}
