@@ -75,7 +75,6 @@ func executePrefetchGitHubPullRequest(logger Logger, ctx context.Context, config
 	// Get pull request details
 	cacheKey := fmt.Sprintf("%s/%s#%d", owner, repo, number)
 	if pullRequest, ok := githubPullRequestCache[cacheKey]; ok {
-		fmt.Println("cache hit!!")
 		return pullRequest, nil
 	}
 	apiPullRequest, resp, err := client.PullRequests.Get(ctx, owner, repo, number)
