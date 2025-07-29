@@ -109,13 +109,13 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 	// Check if repository is allowed
 	repoFullName := prData.Owner + "/" + prData.Repo
 	if !slices.Contains(config.Approval.AllowedRepositories, repoFullName) {
-		logger.Warn("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
+		logger.Debug("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
 		return nil
 	}
 
 	// Check if author is allowed
 	if !slices.Contains(config.Approval.AllowedUsernames, prData.Author) {
-		logger.Warn("Author not in allowed list", "uid", uid, "author", prData.Author, "allowed", config.Approval.AllowedUsernames)
+		logger.Debug("Author not in allowed list", "uid", uid, "author", prData.Author, "allowed", config.Approval.AllowedUsernames)
 		return nil
 	}
 
