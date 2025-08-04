@@ -459,7 +459,9 @@ serverRoutine:
 		if sleepInterval > time.Minute {
 			sleepInterval = time.Minute
 		}
-		logger.Debug("Sleeping", "interval", sleepInterval, "backoffTimes", backoffTimes)
+		if sleepInterval > configuredSleepInternal {
+			logger.Warn("Backing off", "interval", sleepInterval, "backoffTimes", backoffTimes)
+		}
 		select {
 		case <-ctx.Done():
 			break serverRoutine
