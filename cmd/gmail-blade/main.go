@@ -441,15 +441,25 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 	logger.Info("Server started (press Ctrl+C to stop)")
 
 	processedUIDs := make(map[imap.UID]struct{})
-	sleepInterval, _ := time.ParseDuration(config.Server.SleepInterval)
-
+	configuredSleepInternal, _ := time.ParseDuration(config.Server.SleepInterval)
+	backoffTimes := 0
 serverRoutine:
 	for {
 		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("Failed to process messages", "error", err)
+			if strings.Contains(err.Error(), "unexpected EOF") {
+				backoffTimes++
+			}
+		} else {
+			backoffTimes = 0
 		}
 
+		sleepInterval := configuredSleepInternal * time.Duration(backoffTimes+1)
+		if sleepInterval > time.Minute {
+			sleepInterval = time.Minute
+		}
+		logger.Debug("Sleeping", "interval", sleepInterval, "backoffTimes", backoffTimes)
 		select {
 		case <-ctx.Done():
 			break serverRoutine
