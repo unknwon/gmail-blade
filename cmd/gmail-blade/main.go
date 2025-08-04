@@ -186,7 +186,7 @@ func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
 }
 
 func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
-	client, closeClient, err := getAuthenticatedClient(config.Credentials, nil)
+	client, closeClient, err := getAuthenticatedClient(config.Credentials, &imapclient.Options{})
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
 	}
@@ -472,7 +472,7 @@ serverRoutine:
 }
 
 func runListMailboxes(logger Logger, config *config) error {
-	client, closeClient, err := getAuthenticatedClient(config.Credentials, nil)
+	client, closeClient, err := getAuthenticatedClient(config.Credentials, &imapclient.Options{})
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
 	}
