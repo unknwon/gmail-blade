@@ -316,18 +316,16 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 	for _, f := range config.Filters {
 		// Execute prefetches and collect prefetch data
 		for _, prefetch := range f.Prefetches {
+			// Only execute prefetch for GitHub pull request notifications.
 			if githubPullRequestRegexp.MatchString(prefetch) &&
 				githubPullRequestURLRegex.MatchString(body) &&
 				prefetchData[prefetchGitHubPullRequestKey] == nil {
-				// Only execute prefetch for GitHub pull request notifications
-				if githubPullRequestURLRegex.MatchString(body) {
-					prData, err := executePrefetchGitHubPullRequest(logger, ctx, config.GitHub, body)
-					if err != nil {
-						logger.Error("Failed to execute GitHub pull request prefetch", "error", err)
-						continue
-					}
-					prefetchData[prefetchGitHubPullRequestKey] = prData
+				prData, err := executePrefetchGitHubPullRequest(logger, ctx, config.GitHub, body)
+				if err != nil {
+					logger.Error("Failed to execute GitHub pull request prefetch", "error", err)
+					continue
 				}
+				prefetchData[prefetchGitHubPullRequestKey] = prData
 			}
 		}
 
