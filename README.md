@@ -19,8 +19,10 @@ I am an inbox-zero guy, I rely on emails for all my notifications because the na
 ### Installation
 
 ```zsh
-go install unknwon.dev/gmail-blade/cmd/gmail-blade
+go install unknwon.dev/gmail-blade/cmd/gmail-blade@latest
 ```
+
+Or use [unknwon/homebrew-tap](https://github.com/unknwon/homebrew-tap).
 
 ### Configuration
 
