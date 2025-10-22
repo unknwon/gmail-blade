@@ -446,7 +446,7 @@ serverRoutine:
 		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("Failed to process messages", "error", err)
-			if strings.Contains(err.Error(), "unexpected EOF") {
+			if strings.Contains(err.Error(), "unexpected EOF") || strings.Contains(err.Error(), "connection reset by peer") {
 				backoffTimes++
 			}
 		} else {
