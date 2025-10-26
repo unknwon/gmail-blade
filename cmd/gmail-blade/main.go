@@ -448,11 +448,12 @@ serverRoutine:
 			if strings.Contains(err.Error(), "unexpected EOF") || strings.Contains(err.Error(), "connection reset by peer") {
 				backoffTimes++
 				// Log as warning for backoff errors, but log as error every 5th time
-				logFields := []interface{}{"error", err, "backoffTimes", backoffTimes}
+				msg := "Failed to process messages"
+				logFields := []any{"error", err, "backoffTimes", backoffTimes}
 				if backoffTimes%5 == 0 {
-					logger.Error("Failed to process messages", logFields...)
+					logger.Error(msg, logFields...)
 				} else {
-					logger.Warn("Failed to process messages", logFields...)
+					logger.Warn(msg, logFields...)
 				}
 			} else {
 				logger.Error("Failed to process messages", "error", err)
