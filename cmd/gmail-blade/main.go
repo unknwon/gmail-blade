@@ -168,6 +168,28 @@ var (
 	githubPullRequestRegexp = regexp.MustCompile(`(?i)github\s+pull\s+request`)
 )
 
+// transientErrors is a list of error messages that are considered transient
+// and should be retried with backoff.
+var transientErrors = []string{
+	"unexpected EOF",
+	"connection reset by peer",
+	"imap: NO Lookup failed",
+}
+
+// isTransientError checks if an error message contains any of the known transient error patterns.
+func isTransientError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := err.Error()
+	for _, transientErr := range transientErrors {
+		if strings.Contains(errMsg, transientErr) {
+			return true
+		}
+	}
+	return false
+}
+
 func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
 	uids := make(map[imap.UID]struct{})
 	parts := strings.Split(uidsStr, ",")
@@ -445,7 +467,7 @@ serverRoutine:
 	for {
 		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			if strings.Contains(err.Error(), "unexpected EOF") || strings.Contains(err.Error(), "connection reset by peer") {
+			if isTransientError(err) {
 				backoffTimes++
 				// Log as warning for backoff errors, but log as error every 5th time
 				msg := "Failed to process messages"
