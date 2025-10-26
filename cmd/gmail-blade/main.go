@@ -445,9 +445,16 @@ serverRoutine:
 	for {
 		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
-			logger.Error("Failed to process messages", "error", err)
 			if strings.Contains(err.Error(), "unexpected EOF") || strings.Contains(err.Error(), "connection reset by peer") {
 				backoffTimes++
+				// Log as warning for backoff errors, but log as error every 5th time
+				if backoffTimes%5 == 0 {
+					logger.Error("Failed to process messages", "error", err)
+				} else {
+					logger.Warn("Failed to process messages", "error", err)
+				}
+			} else {
+				logger.Error("Failed to process messages", "error", err)
 			}
 		} else {
 			backoffTimes = 0
