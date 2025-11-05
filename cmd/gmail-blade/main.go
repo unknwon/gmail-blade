@@ -174,6 +174,7 @@ var transientErrors = []string{
 	"unexpected EOF",
 	"connection reset by peer",
 	"imap: NO Lookup failed",
+	"dial IMAP server: EOF",
 }
 
 // isTransientError checks if an error message contains any of the known transient error patterns.
