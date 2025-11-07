@@ -175,6 +175,7 @@ var transientErrors = []string{
 	"connection reset by peer",
 	"imap: NO Lookup failed",
 	"dial IMAP server: EOF",
+	"use of closed network connection",
 }
 
 // isTransientError checks if an error message contains any of the known transient error patterns.
@@ -274,11 +275,9 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 
 			err = processMessage(logger, ctx, dryRun, config, client, msg)
 			if err != nil {
-				// We need to continue processing other messages even if one fails
-				logger.Error("Failed to process message", "uid", msg.UID, "error", err)
-			} else {
-				processedUIDs[msg.UID] = struct{}{}
+				return errors.Wrapf(err, "uid %d", msg.UID)
 			}
+			processedUIDs[msg.UID] = struct{}{}
 		}
 	}
 	return nil
