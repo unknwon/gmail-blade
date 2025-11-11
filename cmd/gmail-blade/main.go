@@ -173,6 +173,7 @@ var (
 var transientErrors = []string{
 	"unexpected EOF",
 	"connection reset by peer",
+	"i/o timeout",
 	"use of closed network connection",
 	"dial IMAP server: EOF",
 	"imap: NO Lookup failed",
