@@ -58,8 +58,9 @@ github:
 # Optional Slack integration
 slack:
   # Slack webhook URL for incoming webhooks
+  # You can also use the name of an environment variable, or leave empty to be prompted at start.
   # When webhook_url is not defined, the integration is considered disabled.
-  webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+  webhook_url: "$SLACK_WEBHOOK_URL"
   # Log level for messages to send to Slack (empty = disabled)
   # Valid levels: debug, info, warn, error (case-insensitive)
   send_log_level: "error"

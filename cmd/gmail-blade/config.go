@@ -66,9 +66,7 @@ func parseConfig(path string) (*config, error) {
 		return nil, errors.Wrap(err, "parse config file")
 	}
 
-	// Allow environment variable override for password
 	c.Credentials.Password = os.ExpandEnv(c.Credentials.Password)
-	// Prompt for password if empty
 	if c.Credentials.Password == "" {
 		fmt.Print("Password: ")
 		password, err := term.ReadPassword(syscall.Stdin)
@@ -79,27 +77,20 @@ func parseConfig(path string) (*config, error) {
 		c.Credentials.Password = string(password)
 	}
 
-	// Set default server sleep interval if not configured
 	if c.Server.SleepInterval == "" {
 		c.Server.SleepInterval = "15s"
 	}
-	// Validate sleep interval duration
 	if _, err := time.ParseDuration(c.Server.SleepInterval); err != nil {
 		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
 	}
 
-	// Allow environment variable override for GitHub personal access token
 	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
-
-	// Allow environment variable override for Slack webhook URL
 	c.Slack.WebhookURL = os.ExpandEnv(c.Slack.WebhookURL)
 
-	// Check if GitHub PAT is required
 	var requireGitHubPAT bool
 	if c.GitHub.Approval.Enabled {
 		requireGitHubPAT = true
 	} else {
-		// Check if any filter uses GitHub pull request prefetch
 	loop:
 		for _, f := range c.Filters {
 			for _, prefetch := range f.Prefetches {
@@ -111,7 +102,6 @@ func parseConfig(path string) (*config, error) {
 		}
 	}
 
-	// Prompt for GitHub personal access token if required but empty.
 	if requireGitHubPAT && c.GitHub.PersonalAccessToken == "" {
 		fmt.Print("GitHub Personal Access Token: ")
 		token, err := term.ReadPassword(syscall.Stdin)
@@ -123,7 +113,6 @@ func parseConfig(path string) (*config, error) {
 	}
 
 	if c.GitHub.Approval.Enabled {
-		// Validate GitHub approval allowlists are not empty
 		if len(c.GitHub.Approval.AllowedUsernames) == 0 {
 			return nil, errors.New("github.approval.allowed_usernames cannot be empty")
 		}
@@ -132,7 +121,6 @@ func parseConfig(path string) (*config, error) {
 		}
 	}
 
-	// Prompt for Slack webhook URL if required but empty.
 	if c.Slack.SendLogLevel != "" && c.Slack.WebhookURL == "" {
 		fmt.Print("Slack Webhook URL: ")
 		webhookURL, err := term.ReadPassword(syscall.Stdin)
@@ -150,7 +138,6 @@ func parseConfig(path string) (*config, error) {
 		}
 		c.Filters[i].CompiledCondition = program
 
-		// Check if this filter uses GitHub review action
 		var hasGitHubReviewAction bool
 		for _, action := range f.Actions {
 			if githubReviewRegexp.MatchString(action) {
@@ -161,7 +148,6 @@ func parseConfig(path string) (*config, error) {
 			}
 		}
 
-		// Make sure GitHub pull request prefetch exists because GitHub review action requires it.
 		if hasGitHubReviewAction {
 			hasGitHubPullRequestPrefetch := false
 			for _, prefetch := range f.Prefetches {

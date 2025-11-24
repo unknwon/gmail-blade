@@ -82,7 +82,6 @@ func (s *slackLogger) GetLevel() log.Level {
 }
 
 func (s *slackLogger) sendToSlack(logLevel log.Level, level, msg string, keyvals ...interface{}) {
-	// Don't send to Slack if the message level is below the underlying logger's level
 	if logLevel < s.underlying.GetLevel() {
 		return
 	}
@@ -91,7 +90,6 @@ func (s *slackLogger) sendToSlack(logLevel log.Level, level, msg string, keyvals
 		kvStr += fmt.Sprintf("%v: %v\n", keyvals[i], keyvals[i+1])
 	}
 
-	// Map log levels to Slack colors
 	colorMap := map[string]string{
 		"DEBUG": "#808080", // Gray
 		"INFO":  "#36a64f", // Green

@@ -73,7 +73,6 @@ func main() {
 						return errors.Wrap(err, "parse config")
 					}
 
-					// Wrap logger with Slack integration if configured
 					if config.Slack.SendLogLevel != "" {
 						sendLevel, err := log.ParseLevel(config.Slack.SendLogLevel)
 						if err != nil {
@@ -114,7 +113,6 @@ func main() {
 						return errors.Wrap(err, "parse config")
 					}
 
-					// Wrap logger with Slack integration if configured
 					if config.Slack.SendLogLevel != "" {
 						sendLevel, err := log.ParseLevel(config.Slack.SendLogLevel)
 						if err != nil {
@@ -267,7 +265,6 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 				continue
 			}
 
-			// Skip messages not in target UID list if specified
 			if len(targetUIDs) > 0 {
 				if _, ok := targetUIDs[msg.UID]; !ok {
 					logger.Debug("Skipped message not in target UIDs", "uid", msg.UID)
@@ -292,7 +289,6 @@ type enver interface {
 }
 
 func processMessage(logger Logger, ctx context.Context, dryRun bool, config *config, client *imapclient.Client, msg *imapclient.FetchMessageBuffer) error {
-	// Skip read emails
 	if slices.Contains(msg.Flags, imap.FlagSeen) {
 		return nil
 	}
@@ -338,9 +334,7 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 	prefetchData := make(map[string]enver)
 	var actions []string
 	for _, f := range config.Filters {
-		// Execute prefetches and collect prefetch data
 		for _, prefetch := range f.Prefetches {
-			// Only execute prefetch for GitHub pull request notifications.
 			if githubPullRequestRegexp.MatchString(prefetch) &&
 				githubPullRequestURLRegex.MatchString(body) &&
 				prefetchData[prefetchGitHubPullRequestKey] == nil {
@@ -451,7 +445,6 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Create a channel to listen for interrupt signals
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
@@ -471,7 +464,6 @@ serverRoutine:
 		if err != nil && !errors.Is(err, context.Canceled) {
 			if isTransientError(err) {
 				backoffTimes++
-				// Log as warning for backoff errors, but log as error every 5th time
 				msg := "Failed to process messages"
 				logFields := []any{"error", err, "backoffTimes", backoffTimes}
 				if backoffTimes%5 == 0 {
