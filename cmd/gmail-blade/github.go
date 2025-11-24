@@ -35,7 +35,6 @@ var githubPullRequestURLRegex = regexp.MustCompile(`https://github\.com/([^/]+)/
 
 // parseGitHubNotification extracts GitHub pull request information from email content.
 func parseGitHubNotification(body string) (owner, repo string, number int, err error) {
-	// Try to find PR URL in body
 	matches := githubPullRequestURLRegex.FindStringSubmatch(body)
 	if len(matches) < 4 {
 		return "", "", 0, errors.New("could not find GitHub pull request URL in email")
@@ -72,7 +71,6 @@ func executePrefetchGitHubPullRequest(logger Logger, ctx context.Context, config
 
 	client := newGitHubClient(ctx, config.PersonalAccessToken)
 
-	// Get pull request details
 	cacheKey := fmt.Sprintf("%s/%s#%d", owner, repo, number)
 	if pullRequest, ok := githubPullRequestCache[cacheKey]; ok {
 		return pullRequest, nil
@@ -106,14 +104,12 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 		return errors.New("invalid GitHub pull request prefetch data type")
 	}
 
-	// Check if repository is allowed
 	repoFullName := prData.Owner + "/" + prData.Repo
 	if !slices.Contains(config.Approval.AllowedRepositories, repoFullName) {
 		logger.Debug("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
 		return nil
 	}
 
-	// Check if author is allowed
 	if !slices.Contains(config.Approval.AllowedUsernames, prData.Author) {
 		logger.Debug("Author not in allowed list", "uid", uid, "author", prData.Author, "allowed", config.Approval.AllowedUsernames)
 		return nil
@@ -121,13 +117,11 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 
 	client := newGitHubClient(ctx, config.PersonalAccessToken)
 
-	// Check if already approved by current user
 	reviews, _, err := client.PullRequests.ListReviews(ctx, prData.Owner, prData.Repo, prData.Number, nil)
 	if err != nil {
 		return errors.Wrapf(err, "list reviews for GitHub pull request %s#%d", repoFullName, prData.Number)
 	}
 
-	// Get current user to check for existing approval
 	currentUser, _, err := client.Users.Get(ctx, "")
 	if err != nil {
 		return errors.Wrap(err, "get current user")
@@ -140,7 +134,6 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 		}
 	}
 
-	// Submit review approval
 	review := &github.PullRequestReviewRequest{
 		Event: github.Ptr("APPROVE"),
 	}

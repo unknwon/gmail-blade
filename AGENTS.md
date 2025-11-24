@@ -5,3 +5,8 @@
 ## Build instructions
 
 - When you need to use `go build` to test builds, make sure the binary is located under `.bin` to be ignored by `.gitignore`. Always run `golangci-lint run ./...` afterwards and add any new linter errors.
+
+## Coding styles
+
+- Use the same coding style as the rest of the project. Pay special attention how line breaks are made for arguments.
+- Do not add comments that repeats what the code is doing, use more descriptive names instead.
