@@ -91,6 +91,9 @@ func parseConfig(path string) (*config, error) {
 	// Allow environment variable override for GitHub personal access token
 	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
 
+	// Allow environment variable override for Slack webhook URL
+	c.Slack.WebhookURL = os.ExpandEnv(c.Slack.WebhookURL)
+
 	// Check if GitHub PAT is required
 	var requireGitHubPAT bool
 	if c.GitHub.Approval.Enabled {
@@ -129,9 +132,15 @@ func parseConfig(path string) (*config, error) {
 		}
 	}
 
-	// Validate Slack configuration
+	// Prompt for Slack webhook URL if required but empty.
 	if c.Slack.SendLogLevel != "" && c.Slack.WebhookURL == "" {
-		return nil, errors.New("slack.webhook_url cannot be empty when slack.send_log_level is set")
+		fmt.Print("Slack Webhook URL: ")
+		webhookURL, err := term.ReadPassword(syscall.Stdin)
+		if err != nil {
+			return nil, errors.Wrap(err, "read Slack webhook URL")
+		}
+		fmt.Println()
+		c.Slack.WebhookURL = string(webhookURL)
 	}
 
 	for i, f := range c.Filters {
