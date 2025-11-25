@@ -10,7 +10,6 @@ RUN CGO_ENABLED=0 go build \
     ./cmd/gmail-blade
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=build /app/gmail-blade /usr/local/bin/gmail-blade
 
