@@ -40,4 +40,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
       - name: Build image
-        run: docker build -t gmail-blade:test .
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
