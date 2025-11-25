@@ -1,6 +1,4 @@
-FROM golang:1.24-alpine AS build
-
-ARG BUILD_VERSION
+FROM golang:1.25-alpine AS build
 
 RUN apk add --no-cache ca-certificates
 
@@ -9,12 +7,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.version=${BUILD_VERSION}" \
     -trimpath \
     -o gmail-blade \
     ./cmd/gmail-blade
 
-FROM alpine:3.21
+FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=build /app/gmail-blade /usr/local/bin/gmail-blade
