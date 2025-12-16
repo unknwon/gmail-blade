@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/charmbracelet/log v0.4.2
 	github.com/emersion/go-imap/v2 v2.0.0-beta.7
-	github.com/expr-lang/expr v1.17.6
+	github.com/expr-lang/expr v1.17.7
 	github.com/google/go-github/v73 v73.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/urfave/cli/v2 v2.27.7
