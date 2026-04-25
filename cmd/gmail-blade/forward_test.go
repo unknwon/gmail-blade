@@ -13,12 +13,16 @@ func TestParseForwardAction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseForwardAction returned error: %v", err)
 	}
-	if recipient.Address != "ops@example.com" {
-		t.Fatalf("parseForwardAction returned %q", recipient.Address)
+	if recipient != "ops@example.com" {
+		t.Fatalf("parseForwardAction returned %q", recipient)
 	}
 
 	if _, err = parseForwardAction(`forward "not-an-email"`); err == nil {
 		t.Fatal("parseForwardAction should reject invalid addresses")
+	}
+
+	if _, err = parseForwardAction("forward \"ops@example.com\r\nBcc: hidden@example.com\""); err == nil {
+		t.Fatal("parseForwardAction should reject header injection in recipient addresses")
 	}
 }
 
@@ -61,19 +65,17 @@ func TestBuildForwardBody(t *testing.T) {
 }
 
 func TestBuildForwardSMTPMessage(t *testing.T) {
-	message, err := buildForwardSMTPMessage(
+	subject := "Hello\r\nBcc: hidden@example.com"
+	message := buildForwardSMTPMessage(
 		&mail.Address{Address: "me@example.com"},
-		&mail.Address{Address: "ops@example.com"},
-		"Hello\r\nBcc: hidden@example.com",
+		"ops@example.com",
+		subject,
 		"line1\nline2",
 	)
-	if err != nil {
-		t.Fatalf("buildForwardSMTPMessage returned error: %v", err)
-	}
 
 	for _, want := range []string{
 		"From: <me@example.com>\r\n",
-		"To: <ops@example.com>\r\n",
+		"To: ops@example.com\r\n",
 		"MIME-Version: 1.0\r\n",
 		"Content-Type: text/plain; charset=UTF-8\r\n",
 		"\r\nline1\r\nline2",
@@ -85,17 +87,5 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 
 	if strings.Contains(message, "\r\nBcc: hidden@example.com") {
 		t.Fatalf("buildForwardSMTPMessage should sanitize injected headers: %q", message)
-	}
-}
-
-func TestBuildForwardSMTPMessageRejectsInvalidRecipient(t *testing.T) {
-	_, err := buildForwardSMTPMessage(
-		&mail.Address{Address: "me@example.com"},
-		&mail.Address{Address: "ops@example.com\r\nBcc: hidden@example.com"},
-		"Hello",
-		"body",
-	)
-	if err == nil {
-		t.Fatal("buildForwardSMTPMessage should reject invalid recipient headers")
 	}
 }
