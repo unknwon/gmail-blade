@@ -89,3 +89,47 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 		t.Fatalf("buildForwardSMTPMessage should sanitize injected headers: %q", message)
 	}
 }
+
+func TestForwardSubject(t *testing.T) {
+	tests := map[string]string{
+		"":                 "Fwd:",
+		"Hello":            "Fwd: Hello",
+		"Fwd: Hello":       "Fwd: Hello",
+		"fWd: Hello":       "fWd: Hello",
+		"Hello\r\nWorld":   "Fwd: Hello World",
+		"Hello\rWorld\nGo": "Fwd: HelloWorld Go",
+	}
+
+	for input, want := range tests {
+		if got := forwardSubject(input); got != want {
+			t.Fatalf("forwardSubject(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestSanitizeHeaderValue(t *testing.T) {
+	tests := map[string]string{
+		"":             "",
+		"hello":        "hello",
+		"hello\r":      "hello",
+		"hello\n":      "hello ",
+		"he\rllo\ngo":  "hello go",
+		"\r\nsubject":  " subject",
+		"line1\r\nx\r": "line1 x",
+	}
+
+	for input, want := range tests {
+		if got := sanitizeHeaderValue(input); got != want {
+			t.Fatalf("sanitizeHeaderValue(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestNormalizeCRLF(t *testing.T) {
+	input := "line1\r\nline2\rline3\nline4"
+	want := "line1\r\nline2\r\nline3\r\nline4"
+
+	if got := normalizeCRLF(input); got != want {
+		t.Fatalf("normalizeCRLF(%q) = %q, want %q", input, got, want)
+	}
+}
