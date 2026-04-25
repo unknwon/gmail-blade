@@ -25,17 +25,17 @@ func isForwardAction(action string) bool {
 	return action == "forward" || strings.HasPrefix(action, "forward ")
 }
 
-func parseForwardAction(action string) (string, error) {
+func parseForwardAction(action string) (*mail.Address, error) {
 	match := forwardRegexp.FindStringSubmatch(action)
 	if len(match) < 2 {
-		return "", errors.Errorf("invalid forward action format %q", action)
+		return nil, errors.Errorf("invalid forward action format %q", action)
 	}
 
 	address, err := mail.ParseAddress(match[1])
 	if err != nil {
-		return "", errors.Wrapf(err, "invalid forward address %q", match[1])
+		return nil, errors.Wrapf(err, "invalid forward address %q", match[1])
 	}
-	return address.Address, nil
+	return address, nil
 }
 
 func processForwardAction(logger Logger, credentials configCredentials, msg *imapclient.FetchMessageBuffer, body, action string) error {
@@ -50,35 +50,43 @@ func processForwardAction(logger Logger, credentials configCredentials, msg *ima
 	}
 
 	forwardedBody := buildForwardBody(msg.Envelope, body)
-	message := buildForwardSMTPMessage(fromAddress, recipient, msg.Envelope.Subject, forwardedBody)
+	message, err := buildForwardSMTPMessage(fromAddress, recipient, msg.Envelope.Subject, forwardedBody)
+	if err != nil {
+		return errors.Wrap(err, "build forwarded email")
+	}
 
-	logger.Info("Forwarding email", "uid", msg.UID, "to", recipient)
+	logger.Info("Forwarding email", "uid", msg.UID, "to", recipient.Address)
 
 	auth := smtp.PlainAuth("", fromAddress.Address, credentials.Password, gmailSMTPHost)
 	err = smtp.SendMail(
 		net.JoinHostPort(gmailSMTPHost, gmailSMTPPort),
 		auth,
 		fromAddress.Address,
-		[]string{recipient},
+		[]string{recipient.Address},
 		[]byte(message),
 	)
 	if err != nil {
-		return errors.Wrapf(err, "send forwarded email to %q", recipient)
+		return errors.Wrapf(err, "send forwarded email to %q", recipient.Address)
 	}
 	return nil
 }
 
-func buildForwardSMTPMessage(from *mail.Address, recipient, subject, body string) string {
+func buildForwardSMTPMessage(from, recipient *mail.Address, subject, body string) (string, error) {
+	safeRecipient, err := mail.ParseAddress(recipient.Address)
+	if err != nil {
+		return "", errors.Wrapf(err, "parse recipient address %q", recipient.Address)
+	}
+
 	var builder strings.Builder
 	_, _ = fmt.Fprintf(&builder, "From: %s\r\n", from.String())
-	_, _ = fmt.Fprintf(&builder, "To: %s\r\n", recipient)
+	_, _ = fmt.Fprintf(&builder, "To: %s\r\n", safeRecipient.String())
 	_, _ = fmt.Fprintf(&builder, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", forwardSubject(subject)))
 	builder.WriteString("MIME-Version: 1.0\r\n")
 	builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 	builder.WriteString("Content-Transfer-Encoding: 8bit\r\n")
 	builder.WriteString("\r\n")
 	builder.WriteString(normalizeCRLF(body))
-	return builder.String()
+	return builder.String(), nil
 }
 
 func buildForwardBody(envelope *imap.Envelope, body string) string {
