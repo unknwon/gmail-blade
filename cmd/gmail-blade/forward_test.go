@@ -49,6 +49,9 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 	if strings.Contains(message, "\r\nBcc: hidden@example.com") {
 		t.Fatalf("buildForwardSMTPMessage should sanitize injected headers: %q", message)
 	}
+	if strings.Contains(message, "Subject: Hello\r\nBcc: hidden@example.com") {
+		t.Fatalf("buildForwardSMTPMessage should sanitize subject headers: %q", message)
+	}
 }
 
 func TestSanitizeHeaderValue(t *testing.T) {
