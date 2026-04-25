@@ -49,8 +49,8 @@ func processForwardAction(logger Logger, credentials configCredentials, msg *ima
 		return errors.Wrapf(err, "parse authenticated email address %q", credentials.Username)
 	}
 
-	forwardedBody := buildForwardBody(msg.Envelope, body)
-	message := buildForwardSMTPMessage(fromAddress, recipient, msg.Envelope.Subject, forwardedBody)
+	forwardMessageBody := buildForwardBody(msg.Envelope, body)
+	message := buildForwardSMTPMessage(fromAddress, recipient, msg.Envelope.Subject, forwardMessageBody)
 
 	logger.Info("Forwarding email", "uid", msg.UID, "to", recipient)
 
@@ -70,7 +70,7 @@ func processForwardAction(logger Logger, credentials configCredentials, msg *ima
 
 func buildForwardSMTPMessage(from *mail.Address, recipient, subject, body string) string {
 	var builder strings.Builder
-	_, _ = fmt.Fprintf(&builder, "From: %s\r\n", from.String())
+	_, _ = fmt.Fprintf(&builder, "From: %s\r\n", sanitizeHeaderValue(from.String()))
 	_, _ = fmt.Fprintf(&builder, "To: %s\r\n", sanitizeHeaderValue(recipient))
 	_, _ = fmt.Fprintf(&builder, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", forwardSubject(subject)))
 	builder.WriteString("MIME-Version: 1.0\r\n")
@@ -144,8 +144,6 @@ func formatForwardAddress(address imap.Address) string {
 }
 
 func sanitizeHeaderValue(value string) string {
-	value = strings.ReplaceAll(value, "\r", " ")
-	value = strings.ReplaceAll(value, "\n", " ")
 	return strings.Join(strings.Fields(value), " ")
 }
 
