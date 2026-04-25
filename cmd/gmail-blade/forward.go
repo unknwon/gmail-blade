@@ -68,10 +68,10 @@ func processForwardAction(logger Logger, credentials configCredentials, msg *ima
 	return nil
 }
 
-func buildForwardSMTPMessage(from *mail.Address, to, subject, body string) string {
+func buildForwardSMTPMessage(from *mail.Address, recipient, subject, body string) string {
 	var builder strings.Builder
 	_, _ = fmt.Fprintf(&builder, "From: %s\r\n", from.String())
-	_, _ = fmt.Fprintf(&builder, "To: %s\r\n", to)
+	_, _ = fmt.Fprintf(&builder, "To: %s\r\n", recipient)
 	_, _ = fmt.Fprintf(&builder, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", forwardSubject(subject)))
 	builder.WriteString("MIME-Version: 1.0\r\n")
 	builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
