@@ -97,7 +97,7 @@ func TestForwardSubject(t *testing.T) {
 		"Fwd: Hello":       "Fwd: Hello",
 		"fWd: Hello":       "fWd: Hello",
 		"Hello\r\nWorld":   "Fwd: Hello World",
-		"Hello\rWorld\nGo": "Fwd: HelloWorld Go",
+		"Hello\rWorld\nGo": "Fwd: Hello World Go",
 	}
 
 	for input, want := range tests {
@@ -112,9 +112,9 @@ func TestSanitizeHeaderValue(t *testing.T) {
 		"":             "",
 		"hello":        "hello",
 		"hello\r":      "hello",
-		"hello\n":      "hello ",
-		"he\rllo\ngo":  "hello go",
-		"\r\nsubject":  " subject",
+		"hello\n":      "hello",
+		"he\rllo\ngo":  "he llo go",
+		"\r\nsubject":  "subject",
 		"line1\r\nx\r": "line1 x",
 	}
 
