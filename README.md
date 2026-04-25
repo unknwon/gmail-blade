@@ -194,6 +194,7 @@ Each filter can have multiple actions that will be executed in sequence.
 |---------------|--------------------------------------------------------------------|
 | `move to "X"` | Move the message to the "X" mailbox, e.g. `move to "[Gmail]/Spam"` |
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
+| `forward "X"` | Forward the message to the email address "X", e.g. `forward "ops@acme.com"` |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
 | `github review` | Review GitHub pull requests (requires GitHub integration and "GitHub pull request" prefetch, case insensitive) |
 
