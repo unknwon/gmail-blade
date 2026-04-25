@@ -7,20 +7,22 @@ import (
 )
 
 func TestParseForwardAction(t *testing.T) {
+	const wantRecipient = "ops@example.com"
+
 	recipient, err := parseForwardAction(`forward "ops@example.com"`)
 	if err != nil {
-		t.Fatalf("parseForwardAction returned error: %v", err)
+		t.Fatalf("parseForwardAction() error = %v", err)
 	}
-	if recipient != "ops@example.com" {
-		t.Fatalf("parseForwardAction returned %q", recipient)
+	if recipient != wantRecipient {
+		t.Fatalf("parseForwardAction() recipient = %q, want %q", recipient, wantRecipient)
 	}
 
 	if _, err = parseForwardAction(`forward "not-an-email"`); err == nil {
-		t.Fatal("parseForwardAction should reject invalid addresses")
+		t.Fatal("parseForwardAction() error = nil, want non-nil for invalid address")
 	}
 
 	if _, err = parseForwardAction("forward \"ops@example.com\r\nBcc: hidden@example.com\""); err == nil {
-		t.Fatal("parseForwardAction should reject header injection in recipient addresses")
+		t.Fatal("parseForwardAction() error = nil, want non-nil for injected headers")
 	}
 }
 
@@ -42,15 +44,15 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 		"\r\nline1\r\nline2",
 	} {
 		if !strings.Contains(message, want) {
-			t.Fatalf("buildForwardSMTPMessage missing %q in %q", want, message)
+			t.Fatalf("buildForwardSMTPMessage() = %q, want substring %q", message, want)
 		}
 	}
 
 	if strings.Contains(message, "\r\nBcc: hidden@example.com") {
-		t.Fatalf("buildForwardSMTPMessage should sanitize injected headers: %q", message)
+		t.Fatalf("buildForwardSMTPMessage() = %q, want injected header removed", message)
 	}
 	if strings.Contains(message, "Subject: Hello\r\nBcc: hidden@example.com") {
-		t.Fatalf("buildForwardSMTPMessage should sanitize subject headers: %q", message)
+		t.Fatalf("buildForwardSMTPMessage() = %q, want sanitized subject header", message)
 	}
 }
 
