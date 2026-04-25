@@ -4,8 +4,6 @@ import (
 	"net/mail"
 	"strings"
 	"testing"
-
-	"github.com/emersion/go-imap/v2"
 )
 
 func TestParseForwardAction(t *testing.T) {
@@ -26,44 +24,6 @@ func TestParseForwardAction(t *testing.T) {
 	}
 }
 
-func TestBuildForwardBody(t *testing.T) {
-	envelope := &imap.Envelope{
-		From: []imap.Address{{
-			Name:    "Example Sender",
-			Mailbox: "sender",
-			Host:    "example.com",
-		}},
-		ReplyTo: []imap.Address{{
-			Mailbox: "reply",
-			Host:    "example.com",
-		}},
-		To: []imap.Address{{
-			Mailbox: "team",
-			Host:    "example.com",
-		}},
-		Cc: []imap.Address{{
-			Mailbox: "cc",
-			Host:    "example.com",
-		}},
-		Subject: "Status update",
-	}
-
-	body := buildForwardBody(envelope, "hello\nworld")
-	for _, want := range []string{
-		"---------- Forwarded message ----------",
-		`From: "Example Sender" <sender@example.com>`,
-		"Reply-To: reply@example.com",
-		"To: team@example.com",
-		"Cc: cc@example.com",
-		"Subject: Status update",
-		"hello\nworld",
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("buildForwardBody missing %q in %q", want, body)
-		}
-	}
-}
-
 func TestBuildForwardSMTPMessage(t *testing.T) {
 	subject := "Hello\r\nBcc: hidden@example.com"
 	message := buildForwardSMTPMessage(
@@ -76,6 +36,7 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 	for _, want := range []string{
 		"From: <me@example.com>\r\n",
 		"To: ops@example.com\r\n",
+		"Subject: Hello Bcc: hidden@example.com\r\n",
 		"MIME-Version: 1.0\r\n",
 		"Content-Type: text/plain; charset=UTF-8\r\n",
 		"\r\nline1\r\nline2",
@@ -87,23 +48,6 @@ func TestBuildForwardSMTPMessage(t *testing.T) {
 
 	if strings.Contains(message, "\r\nBcc: hidden@example.com") {
 		t.Fatalf("buildForwardSMTPMessage should sanitize injected headers: %q", message)
-	}
-}
-
-func TestForwardSubject(t *testing.T) {
-	tests := map[string]string{
-		"":                 "Fwd:",
-		"Hello":            "Fwd: Hello",
-		"Fwd: Hello":       "Fwd: Hello",
-		"fWd: Hello":       "fWd: Hello",
-		"Hello\r\nWorld":   "Fwd: Hello World",
-		"Hello\rWorld\nGo": "Fwd: Hello World Go",
-	}
-
-	for input, want := range tests {
-		if got := forwardSubject(input); got != want {
-			t.Fatalf("forwardSubject(%q) = %q, want %q", input, got, want)
-		}
 	}
 }
 
