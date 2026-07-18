@@ -89,7 +89,15 @@ func main() {
 						}
 					}
 
-					return runOnce(logger, c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}), targetUIDs)
+					return runOnce(
+						logger,
+						c.Context,
+						c.Bool("dry-run"),
+						config,
+						newCloudflareKVCache(config.Cache.CloudflareKV),
+						make(map[imap.UID]struct{}),
+						targetUIDs,
+					)
 				},
 			},
 			{
@@ -209,7 +217,15 @@ func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
 	return uids, nil
 }
 
-func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
+func runOnce(
+	logger Logger,
+	ctx context.Context,
+	dryRun bool,
+	config *config,
+	cache *cloudflareKVCache,
+	processedUIDs map[imap.UID]struct{},
+	targetUIDs map[imap.UID]struct{},
+) error {
 	client, closeClient, err := getAuthenticatedClient(config.Credentials, &imapclient.Options{})
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
@@ -272,9 +288,31 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 				}
 			}
 
+			if slices.Contains(msg.Flags, imap.FlagSeen) {
+				processedUIDs[msg.UID] = struct{}{}
+				continue
+			}
+
+			if cache != nil {
+				cached, err := cache.contains(ctx, msg.UID)
+				if err != nil {
+					return errors.Wrapf(err, "check cached uid %d", msg.UID)
+				}
+				if cached {
+					logger.Debug("Skipped cached message", "uid", msg.UID)
+					processedUIDs[msg.UID] = struct{}{}
+					continue
+				}
+			}
+
 			err = processMessage(logger, ctx, dryRun, config, client, msg)
 			if err != nil {
 				return errors.Wrapf(err, "uid %d", msg.UID)
+			}
+			if cache != nil && !dryRun {
+				if err := cache.put(ctx, msg.UID, msg.Envelope.Subject); err != nil {
+					return errors.Wrapf(err, "cache uid %d", msg.UID)
+				}
 			}
 			processedUIDs[msg.UID] = struct{}{}
 		}
@@ -456,11 +494,12 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 	logger.Info("Server started (press Ctrl+C to stop)")
 
 	processedUIDs := make(map[imap.UID]struct{})
+	cache := newCloudflareKVCache(config.Cache.CloudflareKV)
 	configuredSleepInternal, _ := time.ParseDuration(config.Server.SleepInterval)
 	backoffTimes := 0
 serverRoutine:
 	for {
-		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
+		err := runOnce(logger, ctx, dryRun, config, cache, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			if isTransientError(err) {
 				backoffTimes++
