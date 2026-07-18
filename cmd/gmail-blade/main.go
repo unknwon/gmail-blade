@@ -95,6 +95,7 @@ func main() {
 						c.Bool("dry-run"),
 						config,
 						newCloudflareKVCache(config.Cache.CloudflareKV),
+						true,
 						make(map[imap.UID]struct{}),
 						targetUIDs,
 					)
@@ -223,6 +224,7 @@ func runOnce(
 	dryRun bool,
 	config *config,
 	cache *cloudflareKVCache,
+	checkCache bool,
 	processedUIDs map[imap.UID]struct{},
 	targetUIDs map[imap.UID]struct{},
 ) error {
@@ -293,7 +295,7 @@ func runOnce(
 				continue
 			}
 
-			if cache != nil {
+			if cache != nil && checkCache {
 				cached, err := cache.contains(ctx, msg.UID)
 				if err != nil {
 					return errors.Wrapf(err, "check cached uid %d", msg.UID)
@@ -495,11 +497,12 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 
 	processedUIDs := make(map[imap.UID]struct{})
 	cache := newCloudflareKVCache(config.Cache.CloudflareKV)
+	checkCache := true
 	configuredSleepInternal, _ := time.ParseDuration(config.Server.SleepInterval)
 	backoffTimes := 0
 serverRoutine:
 	for {
-		err := runOnce(logger, ctx, dryRun, config, cache, processedUIDs, nil)
+		err := runOnce(logger, ctx, dryRun, config, cache, checkCache, processedUIDs, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			if isTransientError(err) {
 				backoffTimes++
@@ -515,6 +518,7 @@ serverRoutine:
 			}
 		} else {
 			backoffTimes = 0
+			checkCache = false
 		}
 
 		sleepInterval := configuredSleepInternal * time.Duration(backoffTimes+1)
