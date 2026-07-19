@@ -13,21 +13,22 @@ import (
 	"github.com/emersion/go-imap/v2"
 )
 
-func TestCloudflareKVCacheContains(t *testing.T) {
+func TestCloudflareKVCacheHighestUID(t *testing.T) {
 	tests := []struct {
 		name       string
 		statusCode int
-		want       bool
+		value      cloudflareKVCacheValue
+		want       imap.UID
 	}{
 		{
 			name:       "cached",
 			statusCode: http.StatusOK,
-			want:       true,
+			value:      cloudflareKVCacheValue{UID: imap.UID(123)},
+			want:       imap.UID(123),
 		},
 		{
 			name:       "not cached",
 			statusCode: http.StatusNotFound,
-			want:       false,
 		},
 	}
 	for _, test := range tests {
@@ -36,20 +37,25 @@ func TestCloudflareKVCacheContains(t *testing.T) {
 				if got := r.Header.Get("Authorization"); got != "Bearer token" {
 					t.Errorf("Authorization header = %q, want %q", got, "Bearer token")
 				}
-				if got := r.URL.Path; got != "/accounts/account/storage/kv/namespaces/namespace/values/123" {
+				if got := r.URL.Path; got != "/accounts/account/storage/kv/namespaces/namespace/values/highest_uid" {
 					t.Errorf("path = %q", got)
 				}
 				w.WriteHeader(test.statusCode)
+				if test.statusCode == http.StatusOK {
+					if err := json.NewEncoder(w).Encode(test.value); err != nil {
+						t.Fatal(err)
+					}
+				}
 			}))
 			defer server.Close()
 
 			cache := testCloudflareKVCache(server)
-			got, err := cache.contains(context.Background(), imap.UID(123))
+			got, err := cache.highestUID(context.Background())
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got != test.want {
-				t.Errorf("contains() = %t, want %t", got, test.want)
+				t.Errorf("highestUID() = %d, want %d", got, test.want)
 			}
 		})
 	}
@@ -76,6 +82,9 @@ func TestCloudflareKVCachePut(t *testing.T) {
 		}
 		if value.CachedAt.IsZero() {
 			t.Error("cached_at is zero")
+		}
+		if value.UID != imap.UID(123) {
+			t.Errorf("uid = %d, want %d", value.UID, 123)
 		}
 		w.WriteHeader(http.StatusOK)
 	}))

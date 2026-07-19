@@ -7,14 +7,16 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
 	"github.com/pkg/errors"
 )
 
-const cloudflareAPIURL = "https://api.cloudflare.com/client/v4"
+const (
+	cloudflareAPIURL          = "https://api.cloudflare.com/client/v4"
+	cloudflareKVHighestUIDKey = "highest_uid"
+)
 
 type cloudflareKVCache struct {
 	accountID   string
@@ -28,6 +30,7 @@ type cloudflareKVCache struct {
 type cloudflareKVCacheValue struct {
 	CachedAt time.Time `json:"cached_at"`
 	Title    string    `json:"title"`
+	UID      imap.UID  `json:"uid"`
 }
 
 func newCloudflareKVCache(config configCloudflareKV) *cloudflareKVCache {
@@ -44,34 +47,39 @@ func newCloudflareKVCache(config configCloudflareKV) *cloudflareKVCache {
 	}
 }
 
-func (c *cloudflareKVCache) contains(ctx context.Context, uid imap.UID) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.valueURL(uid), nil)
+func (c *cloudflareKVCache) highestUID(ctx context.Context) (imap.UID, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.valueURL(), nil)
 	if err != nil {
-		return false, errors.Wrap(err, "create request")
+		return 0, errors.Wrap(err, "create request")
 	}
 	req.Header.Set("Authorization", "Bearer "+c.apiToken)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return false, errors.Wrap(err, "send request")
+		return 0, errors.Wrap(err, "send request")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
 		_, _ = io.Copy(io.Discard, resp.Body)
-		return false, nil
+		return 0, nil
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return false, cloudflareKVResponseError(resp)
+		return 0, cloudflareKVResponseError(resp)
 	}
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return true, nil
+
+	var value cloudflareKVCacheValue
+	if err := json.NewDecoder(resp.Body).Decode(&value); err != nil {
+		return 0, errors.Wrap(err, "decode value")
+	}
+	return value.UID, nil
 }
 
 func (c *cloudflareKVCache) put(ctx context.Context, uid imap.UID, title string) error {
 	data, err := json.Marshal(cloudflareKVCacheValue{
 		CachedAt: time.Now().UTC(),
 		Title:    title,
+		UID:      uid,
 	})
 	if err != nil {
 		return errors.Wrap(err, "marshal value")
@@ -79,7 +87,7 @@ func (c *cloudflareKVCache) put(ctx context.Context, uid imap.UID, title string)
 
 	url := fmt.Sprintf(
 		"%s?expiration_ttl=%d",
-		c.valueURL(uid),
+		c.valueURL(),
 		int64(c.ttl/time.Second),
 	)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(data))
@@ -102,13 +110,13 @@ func (c *cloudflareKVCache) put(ctx context.Context, uid imap.UID, title string)
 	return nil
 }
 
-func (c *cloudflareKVCache) valueURL(uid imap.UID) string {
+func (c *cloudflareKVCache) valueURL() string {
 	return fmt.Sprintf(
 		"%s/accounts/%s/storage/kv/namespaces/%s/values/%s",
 		c.baseURL,
 		c.accountID,
 		c.namespaceID,
-		strconv.FormatUint(uint64(uid), 10),
+		cloudflareKVHighestUIDKey,
 	)
 }
 

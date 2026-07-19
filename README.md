@@ -41,7 +41,7 @@ server:
   # Uses Go duration format, e.g. "30s", "2m", "1h30m".
   sleep_interval: "15s"
 
-# Optional Cloudflare KV cache to avoid reprocessing unread messages after restarts
+# Optional Cloudflare KV checkpoint to avoid reprocessing unread messages after restarts
 cache:
   cloudflare_kv:
     account_id: "0123456789abcdef"
