@@ -28,9 +28,9 @@ type cloudflareKVCache struct {
 }
 
 type cloudflareKVCacheValue struct {
-	CachedAt time.Time `json:"cached_at"`
-	Title    string    `json:"title"`
-	UID      imap.UID  `json:"uid"`
+	CachedAt     time.Time `json:"cached_at"`
+	IMAPUsername string    `json:"imap_username"`
+	IMAPUID      imap.UID  `json:"imap_uid"`
 }
 
 type cloudflareKVErrorResponse struct {
@@ -53,7 +53,7 @@ func newCloudflareKVCache(config configCloudflareKV) *cloudflareKVCache {
 	}
 }
 
-func (c *cloudflareKVCache) highestUID(ctx context.Context) (imap.UID, error) {
+func (c *cloudflareKVCache) highestUID(ctx context.Context, imapUsername string) (imap.UID, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.valueURL(), nil)
 	if err != nil {
 		return 0, errors.Wrap(err, "create request")
@@ -90,14 +90,17 @@ func (c *cloudflareKVCache) highestUID(ctx context.Context) (imap.UID, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&value); err != nil {
 		return 0, errors.Wrap(err, "decode value")
 	}
-	return value.UID, nil
+	if value.IMAPUsername != imapUsername {
+		return 0, nil
+	}
+	return value.IMAPUID, nil
 }
 
-func (c *cloudflareKVCache) put(ctx context.Context, uid imap.UID, title string) error {
+func (c *cloudflareKVCache) put(ctx context.Context, imapUsername string, uid imap.UID) error {
 	data, err := json.Marshal(cloudflareKVCacheValue{
-		CachedAt: time.Now().UTC(),
-		Title:    title,
-		UID:      uid,
+		CachedAt:     time.Now().UTC(),
+		IMAPUsername: imapUsername,
+		IMAPUID:      uid,
 	})
 	if err != nil {
 		return errors.Wrap(err, "marshal value")

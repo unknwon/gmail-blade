@@ -98,7 +98,10 @@ func main() {
 					}
 					var highestUID imap.UID
 					if cache != nil {
-						highestUID, err = cache.highestUID(c.Context)
+						highestUID, err = cache.highestUID(
+							c.Context,
+							config.Credentials.Username,
+						)
 						if err != nil {
 							return errors.Wrap(err, "get highest cached UID")
 						}
@@ -295,7 +298,6 @@ func runOnce(
 		}
 
 		var batchHighestUID imap.UID
-		var batchHighestUIDTitle string
 		for _, msg := range messages {
 			select {
 			case <-ctx.Done():
@@ -320,14 +322,13 @@ func runOnce(
 			}
 			if msg.UID > batchHighestUID {
 				batchHighestUID = msg.UID
-				batchHighestUIDTitle = msg.Envelope.Subject
 			}
 		}
 		if batchHighestUID == 0 {
 			continue
 		}
 		if cache != nil && !dryRun {
-			if err := cache.put(ctx, batchHighestUID, batchHighestUIDTitle); err != nil {
+			if err := cache.put(ctx, config.Credentials.Username, batchHighestUID); err != nil {
 				return errors.Wrapf(err, "cache uid %d", batchHighestUID)
 			}
 		}
@@ -516,7 +517,7 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 	var highestUID imap.UID
 	if cache != nil {
 		var err error
-		highestUID, err = cache.highestUID(ctx)
+		highestUID, err = cache.highestUID(ctx, config.Credentials.Username)
 		if err != nil {
 			return errors.Wrap(err, "get highest cached UID")
 		}
