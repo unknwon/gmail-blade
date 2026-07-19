@@ -47,8 +47,6 @@ cache:
     account_id: "0123456789abcdef"
     namespace_id: "fedcba9876543210"
     api_token: "$CLOUDFLARE_API_TOKEN"
-    # Cache lifetime (default: 2160h, or 90 days)
-    ttl: "2160h"
 
 # Optional GitHub integration
 github:

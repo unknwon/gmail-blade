@@ -36,15 +36,13 @@ type configCache struct {
 }
 
 type configCloudflareKV struct {
-	AccountID   string        `yaml:"account_id"`
-	NamespaceID string        `yaml:"namespace_id"`
-	APIToken    string        `yaml:"api_token"`
-	TTL         string        `yaml:"ttl"`
-	ttlDuration time.Duration `yaml:"-"`
+	AccountID   string `yaml:"account_id"`
+	NamespaceID string `yaml:"namespace_id"`
+	APIToken    string `yaml:"api_token"`
 }
 
 func (c configCloudflareKV) enabled() bool {
-	return c.AccountID != "" || c.NamespaceID != "" || c.APIToken != "" || c.TTL != ""
+	return c.AccountID != "" || c.NamespaceID != "" || c.APIToken != ""
 }
 
 type configGitHub struct {
@@ -112,17 +110,6 @@ func parseConfig(path string) (*config, error) {
 		if c.Cache.CloudflareKV.APIToken == "" {
 			return nil, errors.New("cache.cloudflare_kv.api_token cannot be empty")
 		}
-		if c.Cache.CloudflareKV.TTL == "" {
-			c.Cache.CloudflareKV.TTL = "2160h"
-		}
-		ttl, err := time.ParseDuration(c.Cache.CloudflareKV.TTL)
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid cache.cloudflare_kv.ttl %q", c.Cache.CloudflareKV.TTL)
-		}
-		if ttl < time.Minute {
-			return nil, errors.New("cache.cloudflare_kv.ttl cannot be less than 1m")
-		}
-		c.Cache.CloudflareKV.ttlDuration = ttl
 	}
 
 	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)
