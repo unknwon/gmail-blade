@@ -33,6 +33,12 @@ type cloudflareKVCacheValue struct {
 	UID      imap.UID  `json:"uid"`
 }
 
+type cloudflareKVErrorResponse struct {
+	Errors []struct {
+		Code int `json:"code"`
+	} `json:"errors"`
+}
+
 func newCloudflareKVCache(config configCloudflareKV) *cloudflareKVCache {
 	if !config.enabled() {
 		return nil
@@ -61,8 +67,20 @@ func (c *cloudflareKVCache) highestUID(ctx context.Context) (imap.UID, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		return 0, nil
+		body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return 0, errors.Wrap(err, "read not found response")
+		}
+		var errorResponse cloudflareKVErrorResponse
+		if err := json.Unmarshal(body, &errorResponse); err != nil {
+			return 0, errors.Wrap(err, "decode not found response")
+		}
+		for _, apiError := range errorResponse.Errors {
+			if apiError.Code == 10009 {
+				return 0, nil
+			}
+		}
+		return 0, errors.Errorf("unexpected response status %s: %s", resp.Status, body)
 	}
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return 0, cloudflareKVResponseError(resp)

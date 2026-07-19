@@ -82,14 +82,18 @@ func main() {
 					}
 
 					var targetUIDs map[imap.UID]struct{}
-					if uidsStr := c.String("uids"); uidsStr != "" {
-						targetUIDs, err = parseUIDs(uidsStr)
+					targetedRun := c.IsSet("uids")
+					if targetedRun {
+						targetUIDs, err = parseUIDs(c.String("uids"))
 						if err != nil {
 							return errors.Wrap(err, "parse UIDs")
 						}
+						if len(targetUIDs) == 0 {
+							return errors.New("UIDs cannot be empty")
+						}
 					}
 					cache := newCloudflareKVCache(config.Cache.CloudflareKV)
-					if len(targetUIDs) > 0 {
+					if targetedRun {
 						cache = nil
 					}
 					var highestUID imap.UID
