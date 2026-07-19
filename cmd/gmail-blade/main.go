@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -253,15 +254,29 @@ func runOnce(
 		return errors.Wrap(err, "select INBOX")
 	}
 
-	for idx := 1; ; idx += 100 {
+	uidRange := imap.UIDSet{}
+	uidRange.AddRange(*highestUID+1, 0)
+	searchData, err := client.UIDSearch(
+		&imap.SearchCriteria{
+			UID:     []imap.UIDSet{uidRange},
+			NotFlag: []imap.Flag{imap.FlagSeen},
+		},
+		nil,
+	).Wait()
+	if err != nil {
+		return errors.Wrap(err, "search unread messages after highest processed UID")
+	}
+	messageUIDs := searchData.AllUIDs()
+
+	for idx := 0; idx < len(messageUIDs); idx += 100 {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
 
-		seqSet := imap.SeqSetNum()
-		seqSet.AddRange(uint32(idx), uint32(idx+100))
+		end := min(idx+100, len(messageUIDs))
+		uidSet := imap.UIDSetNum(messageUIDs[idx:end]...)
 		fetchOptions := &imap.FetchOptions{
 			Envelope: true,
 			Flags:    true,
@@ -271,25 +286,19 @@ func runOnce(
 			},
 		}
 
-		messages, err := client.Fetch(seqSet, fetchOptions).Collect()
+		messages, err := client.Fetch(uidSet, fetchOptions).Collect()
 		if err != nil {
 			return errors.Wrap(err, "fetch messages")
 		}
-		if len(messages) == 0 {
-			logger.Debug("No more unread messages found")
-			break
-		}
+		slices.SortFunc(messages, func(a, b *imapclient.FetchMessageBuffer) int {
+			return cmp.Compare(a.UID, b.UID)
+		})
 
 		for _, msg := range messages {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-			}
-
-			if msg.UID <= *highestUID {
-				logger.Debug("Skipped message below highest processed UID", "uid", msg.UID, "highestUID", *highestUID)
-				continue
 			}
 
 			if len(targetUIDs) > 0 {
@@ -314,6 +323,9 @@ func runOnce(
 			}
 			*highestUID = msg.UID
 		}
+	}
+	if len(messageUIDs) == 0 {
+		logger.Debug("No unread messages found after highest processed UID", "highestUID", *highestUID)
 	}
 	return nil
 }
