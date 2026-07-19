@@ -22,7 +22,6 @@ type cloudflareKVCache struct {
 	accountID   string
 	namespaceID string
 	apiToken    string
-	ttl         time.Duration
 	baseURL     string
 	httpClient  *http.Client
 }
@@ -47,7 +46,6 @@ func newCloudflareKVCache(config configCloudflareKV) *cloudflareKVCache {
 		accountID:   config.AccountID,
 		namespaceID: config.NamespaceID,
 		apiToken:    config.APIToken,
-		ttl:         config.ttlDuration,
 		baseURL:     cloudflareAPIURL,
 		httpClient:  &http.Client{Timeout: 30 * time.Second},
 	}
@@ -106,12 +104,7 @@ func (c *cloudflareKVCache) put(ctx context.Context, imapUsername string, uid im
 		return errors.Wrap(err, "marshal value")
 	}
 
-	url := fmt.Sprintf(
-		"%s?expiration_ttl=%d",
-		c.valueURL(),
-		int64(c.ttl/time.Second),
-	)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewReader(data))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, c.valueURL(), bytes.NewReader(data))
 	if err != nil {
 		return errors.Wrap(err, "create request")
 	}
