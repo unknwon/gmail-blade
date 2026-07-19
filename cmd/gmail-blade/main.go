@@ -272,7 +272,15 @@ func runOnce(
 	if err != nil {
 		return errors.Wrap(err, "search unread messages after highest processed UID")
 	}
+	// The dynamic range "n:*" matches the highest UID in the mailbox even when
+	// that highest UID is below n: the server resolves "*" to the greatest UID
+	// present, and IMAP ranges are order-independent, so "2431:*" collapses to
+	// "2431:2430" == "2430:2431" and re-matches the last message forever. Drop
+	// anything at or below the watermark to enforce a strict "greater than".
 	messageUIDs := searchData.AllUIDs()
+	messageUIDs = slices.DeleteFunc(messageUIDs, func(uid imap.UID) bool {
+		return uid <= *highestUID
+	})
 
 	for idx := 0; idx < len(messageUIDs); idx += 100 {
 		select {
@@ -320,22 +328,24 @@ func runOnce(
 			if err != nil {
 				return errors.Wrapf(err, "uid %d", msg.UID)
 			}
-			if msg.UID > batchHighestUID {
-				batchHighestUID = msg.UID
-			}
+			batchHighestUID = max(batchHighestUID, msg.UID)
 		}
-		// Only advance and write to the cache when the batch moved the highest
-		// UID forward. Cloudflare's KV free plan caps writes at 1000/day, so
-		// skip no-op puts that would store the same value.
-		if batchHighestUID <= *highestUID {
+		if batchHighestUID == 0 {
+			// No message in this batch was processed (all already seen or
+			// filtered out), so there is nothing to advance or persist.
 			continue
 		}
-		if cache != nil && !dryRun {
+		// Only write to the cache when the batch actually moved the highest UID
+		// forward. Cloudflare's KV free plan caps writes at 1000/day, so skip
+		// no-op puts that would store the same value. The in-memory pointer is
+		// always advanced so the next search skips messages already processed.
+		if cache != nil && !dryRun && batchHighestUID > *highestUID {
 			if err := cache.put(ctx, config.Credentials.Username, batchHighestUID); err != nil {
 				return errors.Wrapf(err, "cache uid %d", batchHighestUID)
 			}
+			logger.Info("Wrote highest UID to cache", "uid", batchHighestUID)
 		}
-		*highestUID = batchHighestUID
+		*highestUID = max(*highestUID, batchHighestUID)
 	}
 	if len(messageUIDs) == 0 {
 		logger.Debug("No unread messages found after highest processed UID", "highestUID", *highestUID)
@@ -547,10 +557,7 @@ serverRoutine:
 			backoffTimes = 0
 		}
 
-		sleepInterval := configuredSleepInternal * time.Duration(backoffTimes+1)
-		if sleepInterval > time.Minute {
-			sleepInterval = time.Minute
-		}
+		sleepInterval := min(configuredSleepInternal*time.Duration(backoffTimes+1), time.Minute)
 		if sleepInterval > configuredSleepInternal {
 			logger.Warn("Backing off", "interval", sleepInterval, "backoffTimes", backoffTimes)
 		}
