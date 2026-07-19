@@ -1,7 +1,6 @@
 package main
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"os"
@@ -290,10 +289,9 @@ func runOnce(
 		if err != nil {
 			return errors.Wrap(err, "fetch messages")
 		}
-		slices.SortFunc(messages, func(a, b *imapclient.FetchMessageBuffer) int {
-			return cmp.Compare(a.UID, b.UID)
-		})
 
+		var batchHighestUID imap.UID
+		var batchHighestUIDTitle string
 		for _, msg := range messages {
 			select {
 			case <-ctx.Done():
@@ -316,13 +314,20 @@ func runOnce(
 			if err != nil {
 				return errors.Wrapf(err, "uid %d", msg.UID)
 			}
-			if cache != nil && !dryRun {
-				if err := cache.put(ctx, msg.UID, msg.Envelope.Subject); err != nil {
-					return errors.Wrapf(err, "cache uid %d", msg.UID)
-				}
+			if msg.UID > batchHighestUID {
+				batchHighestUID = msg.UID
+				batchHighestUIDTitle = msg.Envelope.Subject
 			}
-			*highestUID = msg.UID
 		}
+		if batchHighestUID == 0 {
+			continue
+		}
+		if cache != nil && !dryRun {
+			if err := cache.put(ctx, batchHighestUID, batchHighestUIDTitle); err != nil {
+				return errors.Wrapf(err, "cache uid %d", batchHighestUID)
+			}
+		}
+		*highestUID = batchHighestUID
 	}
 	if len(messageUIDs) == 0 {
 		logger.Debug("No unread messages found after highest processed UID", "highestUID", *highestUID)
