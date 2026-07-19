@@ -82,14 +82,40 @@ func main() {
 					}
 
 					var targetUIDs map[imap.UID]struct{}
-					if uidsStr := c.String("uids"); uidsStr != "" {
-						targetUIDs, err = parseUIDs(uidsStr)
+					targetedRun := c.IsSet("uids")
+					if targetedRun {
+						targetUIDs, err = parseUIDs(c.String("uids"))
 						if err != nil {
 							return errors.Wrap(err, "parse UIDs")
 						}
+						if len(targetUIDs) == 0 {
+							return errors.New("UIDs cannot be empty")
+						}
+					}
+					cache := newCloudflareKVCache(config.Cache.CloudflareKV)
+					if targetedRun {
+						cache = nil
+					}
+					var highestUID imap.UID
+					if cache != nil {
+						highestUID, err = cache.highestUID(
+							c.Context,
+							config.Credentials.Username,
+						)
+						if err != nil {
+							return errors.Wrap(err, "get highest cached UID")
+						}
 					}
 
-					return runOnce(logger, c.Context, c.Bool("dry-run"), config, make(map[imap.UID]struct{}), targetUIDs)
+					return runOnce(
+						logger,
+						c.Context,
+						c.Bool("dry-run"),
+						config,
+						cache,
+						&highestUID,
+						targetUIDs,
+					)
 				},
 			},
 			{
@@ -209,7 +235,15 @@ func parseUIDs(uidsStr string) (map[imap.UID]struct{}, error) {
 	return uids, nil
 }
 
-func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, processedUIDs map[imap.UID]struct{}, targetUIDs map[imap.UID]struct{}) error {
+func runOnce(
+	logger Logger,
+	ctx context.Context,
+	dryRun bool,
+	config *config,
+	cache *cloudflareKVCache,
+	highestUID *imap.UID,
+	targetUIDs map[imap.UID]struct{},
+) error {
 	client, closeClient, err := getAuthenticatedClient(config.Credentials, &imapclient.Options{})
 	if err != nil {
 		return errors.Wrap(err, "get authenticated IMAP client")
@@ -226,15 +260,29 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 		return errors.Wrap(err, "select INBOX")
 	}
 
-	for idx := 1; ; idx += 100 {
+	uidRange := imap.UIDSet{}
+	uidRange.AddRange(*highestUID+1, 0)
+	searchData, err := client.UIDSearch(
+		&imap.SearchCriteria{
+			UID:     []imap.UIDSet{uidRange},
+			NotFlag: []imap.Flag{imap.FlagSeen},
+		},
+		nil,
+	).Wait()
+	if err != nil {
+		return errors.Wrap(err, "search unread messages after highest processed UID")
+	}
+	messageUIDs := searchData.AllUIDs()
+
+	for idx := 0; idx < len(messageUIDs); idx += 100 {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
 
-		seqSet := imap.SeqSetNum()
-		seqSet.AddRange(uint32(idx), uint32(idx+100))
+		end := min(idx+100, len(messageUIDs))
+		uidSet := imap.UIDSetNum(messageUIDs[idx:end]...)
 		fetchOptions := &imap.FetchOptions{
 			Envelope: true,
 			Flags:    true,
@@ -244,25 +292,17 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 			},
 		}
 
-		messages, err := client.Fetch(seqSet, fetchOptions).Collect()
+		messages, err := client.Fetch(uidSet, fetchOptions).Collect()
 		if err != nil {
 			return errors.Wrap(err, "fetch messages")
 		}
-		if len(messages) == 0 {
-			logger.Debug("No more unread messages found")
-			break
-		}
 
+		var batchHighestUID imap.UID
 		for _, msg := range messages {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
 			default:
-			}
-
-			if _, ok := processedUIDs[msg.UID]; ok {
-				logger.Debug("Skipped processed message", "uid", msg.UID)
-				continue
 			}
 
 			if len(targetUIDs) > 0 {
@@ -272,12 +312,30 @@ func runOnce(logger Logger, ctx context.Context, dryRun bool, config *config, pr
 				}
 			}
 
+			if slices.Contains(msg.Flags, imap.FlagSeen) {
+				continue
+			}
+
 			err = processMessage(logger, ctx, dryRun, config, client, msg)
 			if err != nil {
 				return errors.Wrapf(err, "uid %d", msg.UID)
 			}
-			processedUIDs[msg.UID] = struct{}{}
+			if msg.UID > batchHighestUID {
+				batchHighestUID = msg.UID
+			}
 		}
+		if batchHighestUID == 0 {
+			continue
+		}
+		if cache != nil && !dryRun {
+			if err := cache.put(ctx, config.Credentials.Username, batchHighestUID); err != nil {
+				return errors.Wrapf(err, "cache uid %d", batchHighestUID)
+			}
+		}
+		*highestUID = batchHighestUID
+	}
+	if len(messageUIDs) == 0 {
+		logger.Debug("No unread messages found after highest processed UID", "highestUID", *highestUID)
 	}
 	return nil
 }
@@ -455,12 +513,20 @@ func runServer(logger Logger, dryRun bool, config *config) error {
 	}()
 	logger.Info("Server started (press Ctrl+C to stop)")
 
-	processedUIDs := make(map[imap.UID]struct{})
+	cache := newCloudflareKVCache(config.Cache.CloudflareKV)
+	var highestUID imap.UID
+	if cache != nil {
+		var err error
+		highestUID, err = cache.highestUID(ctx, config.Credentials.Username)
+		if err != nil {
+			return errors.Wrap(err, "get highest cached UID")
+		}
+	}
 	configuredSleepInternal, _ := time.ParseDuration(config.Server.SleepInterval)
 	backoffTimes := 0
 serverRoutine:
 	for {
-		err := runOnce(logger, ctx, dryRun, config, processedUIDs, nil)
+		err := runOnce(logger, ctx, dryRun, config, cache, &highestUID, nil)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			if isTransientError(err) {
 				backoffTimes++

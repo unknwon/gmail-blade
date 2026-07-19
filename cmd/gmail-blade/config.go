@@ -16,6 +16,7 @@ import (
 type config struct {
 	Credentials configCredentials `yaml:"credentials"`
 	Server      configServer      `yaml:"server"`
+	Cache       configCache       `yaml:"cache"`
 	GitHub      configGitHub      `yaml:"github"`
 	Slack       configSlack       `yaml:"slack"`
 	Filters     []configFilter    `yaml:"filters"`
@@ -28,6 +29,22 @@ type configCredentials struct {
 
 type configServer struct {
 	SleepInterval string `yaml:"sleep_interval"`
+}
+
+type configCache struct {
+	CloudflareKV configCloudflareKV `yaml:"cloudflare_kv"`
+}
+
+type configCloudflareKV struct {
+	AccountID   string        `yaml:"account_id"`
+	NamespaceID string        `yaml:"namespace_id"`
+	APIToken    string        `yaml:"api_token"`
+	TTL         string        `yaml:"ttl"`
+	ttlDuration time.Duration `yaml:"-"`
+}
+
+func (c configCloudflareKV) enabled() bool {
+	return c.AccountID != "" || c.NamespaceID != "" || c.APIToken != "" || c.TTL != ""
 }
 
 type configGitHub struct {
@@ -82,6 +99,30 @@ func parseConfig(path string) (*config, error) {
 	}
 	if _, err := time.ParseDuration(c.Server.SleepInterval); err != nil {
 		return nil, errors.Wrapf(err, "invalid server sleep interval %q", c.Server.SleepInterval)
+	}
+
+	c.Cache.CloudflareKV.APIToken = os.ExpandEnv(c.Cache.CloudflareKV.APIToken)
+	if c.Cache.CloudflareKV.enabled() {
+		if c.Cache.CloudflareKV.AccountID == "" {
+			return nil, errors.New("cache.cloudflare_kv.account_id cannot be empty")
+		}
+		if c.Cache.CloudflareKV.NamespaceID == "" {
+			return nil, errors.New("cache.cloudflare_kv.namespace_id cannot be empty")
+		}
+		if c.Cache.CloudflareKV.APIToken == "" {
+			return nil, errors.New("cache.cloudflare_kv.api_token cannot be empty")
+		}
+		if c.Cache.CloudflareKV.TTL == "" {
+			c.Cache.CloudflareKV.TTL = "2160h"
+		}
+		ttl, err := time.ParseDuration(c.Cache.CloudflareKV.TTL)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid cache.cloudflare_kv.ttl %q", c.Cache.CloudflareKV.TTL)
+		}
+		if ttl < time.Minute {
+			return nil, errors.New("cache.cloudflare_kv.ttl cannot be less than 1m")
+		}
+		c.Cache.CloudflareKV.ttlDuration = ttl
 	}
 
 	c.GitHub.PersonalAccessToken = os.ExpandEnv(c.GitHub.PersonalAccessToken)

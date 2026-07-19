@@ -41,6 +41,15 @@ server:
   # Uses Go duration format, e.g. "30s", "2m", "1h30m".
   sleep_interval: "15s"
 
+# Optional Cloudflare KV checkpoint to avoid reprocessing unread messages after restarts
+cache:
+  cloudflare_kv:
+    account_id: "0123456789abcdef"
+    namespace_id: "fedcba9876543210"
+    api_token: "$CLOUDFLARE_API_TOKEN"
+    # Cache lifetime (default: 2160h, or 90 days)
+    ttl: "2160h"
+
 # Optional GitHub integration
 github:
   # GitHub Personal Access Token for API access
