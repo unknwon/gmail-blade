@@ -429,6 +429,11 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 			if err != nil {
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
+		} else if isForwardAction(action) {
+			err := processForwardAction(logger, config.Credentials, msg, body, action)
+			if err != nil {
+				return errors.Wrap(err, "process forward action")
+			}
 		} else if config.GitHub.Approval.Enabled && githubReviewRegexp.MatchString(action) {
 			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, prefetchData)
 			if err != nil {

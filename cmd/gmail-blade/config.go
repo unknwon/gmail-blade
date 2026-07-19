@@ -145,6 +145,10 @@ func parseConfig(path string) (*config, error) {
 				if !c.GitHub.Approval.Enabled {
 					return nil, errors.Errorf("GitHub review action is used in filter %q but GitHub integration is not enabled", f.Name)
 				}
+			} else if isForwardAction(action) {
+				if _, err := parseForwardAction(action); err != nil {
+					return nil, errors.Wrapf(err, "validate forward action for filter %q", f.Name)
+				}
 			}
 		}
 
