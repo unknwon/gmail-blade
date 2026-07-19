@@ -324,7 +324,10 @@ func runOnce(
 				batchHighestUID = msg.UID
 			}
 		}
-		if batchHighestUID == 0 {
+		// Only advance and write to the cache when the batch moved the highest
+		// UID forward. Cloudflare's KV free plan caps writes at 1000/day, so
+		// skip no-op puts that would store the same value.
+		if batchHighestUID <= *highestUID {
 			continue
 		}
 		if cache != nil && !dryRun {
