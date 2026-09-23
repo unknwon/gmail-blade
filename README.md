@@ -202,7 +202,7 @@ Each filter can have multiple actions that will be executed in sequence.
 | `move to "X"` | Move the message to the "X" mailbox, e.g. `move to "[Gmail]/Spam"` |
 | `label "X"`   | Add label "X" to the message, e.g. `label "GitHub"`                |
 | `delete`      | Delete the message, shortcut for `move to "[Gmail]/Trash"`         |
-| `github review` | Review GitHub pull requests (requires GitHub integration and "GitHub pull request" prefetch, case insensitive) |
+| `github review` | Review GitHub pull requests (requires GitHub integration and "GitHub pull request" prefetch, case insensitive). If the pull request is not approved, the remaining actions are skipped. |
 
 Actions are defined as a list and are executed in the same order as they are defined:
 
@@ -225,6 +225,8 @@ Example of using the GitHub review action:
     - github review
     - label "Auto-approved"
 ```
+
+The `label "Auto-approved"` action runs only when `github review` approves the pull request. If the repository or author is not on the allowed list, the pull request is not approved and the label is not applied.
 
 You will get marginal performance benefit if you put `halt-on-match` ones on the top.
 

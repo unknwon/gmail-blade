@@ -98,39 +98,40 @@ func executePrefetchGitHubPullRequest(logger Logger, ctx context.Context, config
 }
 
 // processGitHubReview handles the "github review" action with prefetch data.
-func processGitHubReview(logger Logger, ctx context.Context, config configGitHub, uid imap.UID, prefetchData map[string]enver) error {
+// It reports whether the pull request is approved by the current user.
+func processGitHubReview(logger Logger, ctx context.Context, config configGitHub, uid imap.UID, prefetchData map[string]enver) (bool, error) {
 	prData, ok := prefetchData[prefetchGitHubPullRequestKey].(*githubPullRequest)
 	if !ok {
-		return errors.New("invalid GitHub pull request prefetch data type")
+		return false, errors.New("invalid GitHub pull request prefetch data type")
 	}
 
 	repoFullName := prData.Owner + "/" + prData.Repo
 	if !slices.Contains(config.Approval.AllowedRepositories, repoFullName) {
 		logger.Debug("Repository not in allowed list", "uid", uid, "repo", repoFullName, "allowed", config.Approval.AllowedRepositories)
-		return nil
+		return false, nil
 	}
 
 	if !slices.Contains(config.Approval.AllowedUsernames, prData.Author) {
 		logger.Debug("Author not in allowed list", "uid", uid, "author", prData.Author, "allowed", config.Approval.AllowedUsernames)
-		return nil
+		return false, nil
 	}
 
 	client := newGitHubClient(ctx, config.PersonalAccessToken)
 
 	reviews, _, err := client.PullRequests.ListReviews(ctx, prData.Owner, prData.Repo, prData.Number, nil)
 	if err != nil {
-		return errors.Wrapf(err, "list reviews for GitHub pull request %s#%d", repoFullName, prData.Number)
+		return false, errors.Wrapf(err, "list reviews for GitHub pull request %s#%d", repoFullName, prData.Number)
 	}
 
 	currentUser, _, err := client.Users.Get(ctx, "")
 	if err != nil {
-		return errors.Wrap(err, "get current user")
+		return false, errors.Wrap(err, "get current user")
 	}
 
 	for _, review := range reviews {
 		if review.GetUser().GetLogin() == currentUser.GetLogin() && review.GetState() == "APPROVED" {
 			logger.Debug("Already approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", prData.Number)
-			return nil
+			return true, nil
 		}
 	}
 
@@ -140,9 +141,9 @@ func processGitHubReview(logger Logger, ctx context.Context, config configGitHub
 
 	_, _, err = client.PullRequests.CreateReview(ctx, prData.Owner, prData.Repo, prData.Number, review)
 	if err != nil {
-		return errors.Wrapf(err, "approve GitHub pull request %s#%d", repoFullName, prData.Number)
+		return false, errors.Wrapf(err, "approve GitHub pull request %s#%d", repoFullName, prData.Number)
 	}
 
 	logger.Info("Successfully approved GitHub pull request", "uid", uid, "repo", repoFullName, "pr", prData.Number)
-	return nil
+	return true, nil
 }

@@ -501,9 +501,13 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 				return errors.Wrapf(err, "move email to mailbox %q", mailboxName)
 			}
 		} else if config.GitHub.Approval.Enabled && githubReviewRegexp.MatchString(action) {
-			err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, prefetchData)
+			approved, err := processGitHubReview(logger, ctx, config.GitHub, msg.UID, prefetchData)
 			if err != nil {
 				return errors.Wrap(err, "process GitHub review action")
+			}
+			if !approved {
+				logger.Debug("Pull request not approved, skip remaining actions", "uid", msg.UID)
+				break
 			}
 		} else {
 			logger.Warn("Unknown action", "action", action)
