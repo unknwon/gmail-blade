@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"regexp"
@@ -16,6 +17,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/emersion/go-imap/v2/imapclient"
 	"github.com/expr-lang/expr"
+	"github.com/google/go-github/v73/github"
 	"github.com/pkg/errors"
 	"github.com/urfave/cli/v2"
 )
@@ -411,7 +413,12 @@ func processMessage(logger Logger, ctx context.Context, dryRun bool, config *con
 				prefetchData[prefetchGitHubPullRequestKey] == nil {
 				prData, err := executePrefetchGitHubPullRequest(logger, ctx, config.GitHub, body)
 				if err != nil {
-					logger.Error("Failed to execute GitHub pull request prefetch", "error", err)
+					var errResp *github.ErrorResponse
+					if errors.As(err, &errResp) && errResp.Response.StatusCode == http.StatusForbidden {
+						logger.Warn("No access to GitHub pull request for prefetch", "error", err)
+					} else {
+						logger.Error("Failed to execute GitHub pull request prefetch", "error", err)
+					}
 					continue
 				}
 				prefetchData[prefetchGitHubPullRequestKey] = prData
