@@ -1,6 +1,6 @@
 module unknwon.dev/gmail-blade
 
-go 1.26.0
+go 1.27.0
 
 require (
 	github.com/charmbracelet/log v0.4.2
